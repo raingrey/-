@@ -238,9 +238,9 @@ typedef struct listeningNode {
     struct rb_node node;
     uint64_t DTUID;
     time_t dumpTime;
-	//这里建立一个哈希表的数据，256个仪表单元0xff，
-	//用0xff%0xf来确定所属哈希表，然后进行最多16次比较即可确定元素
-	struct deviceNode deviceNode_hash[16];
+//这里建立一个哈希表的数据，256个仪表单元0xff，
+//用0xff%0xf来确定所属哈希表，然后进行最多16次比较即可确定元素
+    //struct deviceNode deviceNode_hash[16];
     struct deviceNode * headDevice;
     struct sockaddr_in clientAddr;
 
@@ -333,6 +333,8 @@ extern int RBTListeningNodeNumber;
 
 //save the number of current MeterDataToSave
 extern int MeterDataNumber;
+//网络数据包缓存链表计数
+extern int UdpMsgNumber;
 
 //
 //mysql descripter
@@ -340,6 +342,8 @@ extern MYSQL *sql;
 extern MYSQL *sqlDataSave;
 //
 //
+///全程序共用的socket
+extern serv_sock;
 
 uint32_t  ModBusCRC16(unsigned char *updata,unsigned int len);
 

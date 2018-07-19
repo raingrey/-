@@ -522,17 +522,19 @@ void * ThreadLNManager(){
 	//
 		
 		pthread_mutex_lock(&data_save_mtx);
-		meterDataPrimary * p1 = meterDataPrimaryHead -> next;
-		meterDataSecondary * p2 = meterDataSecondaryHead -> next;
+		meterDataPrimary * p1 = meterDataPrimaryHead;
+		meterDataSecondary * p2 = meterDataSecondaryHead;
 	//1.2 handle meterdataprimary and meterdatasecondary two way link
 		MeterDataNumber=0;
 		while((p1)){
-			p1 = p1 -> next;
+			if(p1->next)
+				p1 = p1 -> next;
 			MeterDataNumber++;
 		}
 	//1.2.1 handle meterdatasecondary two way link
 		while((p2)){
-			p2 = p2 -> next;
+			if(p2 -> next)
+				p2 = p2 -> next;
 			MeterDataNumber++;
 		}
 		if(MeterDataNumber>0){

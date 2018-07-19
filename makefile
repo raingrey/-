@@ -9,3 +9,5 @@ dataProcess.o:dataProcess.c dataProcess.h modbusDriver.h rbtree.h
 dataSave.o:dataSave.c dataSave.h modbusDriver.h rbtree.h
 	gcc -g -c dataSave.c -o dataSave.o -I/usr/include/mysql -L/usr/lib64/mysql -lmysqlclient -lpthread
 
+clean:
+	rm -rf *.o

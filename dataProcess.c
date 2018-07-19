@@ -727,7 +727,7 @@ udpMsg * UdpMsgNodeWaitingForHandle(){
     if((p!=udpMsgHead)){
         //cut is from one-way link-list udpMsg
         udpMsgHead -> next = p -> next;
-		UdpMsgNumber--;
+	UdpMsgNumber--;
         return p;
 	}
     //if there is no udp data
