@@ -8,13 +8,13 @@
 #define BUFF_SIZE 578
 void error_handling(char *message);
 typedef struct{
-	unsigned int DTU_number;
-	unsigned int FM_number;
-	char start_DTU[15]={'3','5','6','5','6','6','0','7','0','9','0','3','4','4','0'};
-	
+	uint32_t DTU_number;
+	uint32_t FM_number;
+	uint8_t start_DTU[15]={'3','5','6','5','6','6','0','7','0','9','0','3','4','4','0'};
+	uint32_t data_size;
 }user_input;
 
-char make_modbus_data(char * message);
+char generate_modbus_data(int dtu_tmp,int fmaddr_tmp);
 uint32_t  ModBusCRC16(unsigned char *updata,unsigned int len);
 int main (int argc,char* argv[]){
 //local socket descripter
@@ -34,8 +34,9 @@ int main (int argc,char* argv[]){
 	user_input setdata; 
 	setdata.DTU_number=1000;
 	setdata.FM_number=30;
-	int tmp;
+	int dtu_tmp,fmaddr_tmp;
 	uint8_t dtu_traversal[15]={0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+	uint8_t dtu_traversal_[15]={0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 //check argc if the parameter is legal
 	if(argc < 3){
 		printf("<IP> Address and <PORT> number to connect is needed\n",argv[0]);
@@ -51,11 +52,16 @@ int main (int argc,char* argv[]){
 			printf("单ModBus总线中仪表数量超出255会被修改为255\n");
 		}
 	}
+	if(argc > 5){
+		if(setdata.data_size=atoi(argv[5])>256){
+			setdata.data_size=255;
+			printf("单ModBus总线中仪表数量超出255会被修改为255\n");
+		}
+	}
 	printf("DTU数量\n",setdata.DTU_number);
 	printf("ModBus总线中仪表数量\n",setdata.FM_number);
-	for(i=14;setdata.DTU_number>0&&i>=0;setdata.DTU_number/=10,i++){
-		dtu_traversal[i]=setdata.DTU_number/10;
-	}
+	printf("仪表数据大小\n",setdata.data_size);
+	
 //2018.7.17
 //@dark_jadeite
 //写完用户带参数输入的解析，小媳妇快饿死了，先去看看小媳妇。
@@ -69,6 +75,15 @@ int main (int argc,char* argv[]){
 	server_addr.sin_addr.s_addr=inet_addr(argv[1]);
 	server_addr.sin_port=htons(atoi(argv[2]));
 	while(1){
+		for(dtu_tmp=setdata.DTU_number;dtu_tmp>0;dtu_tmp--){
+			for(fmaddr_tmp=setdata.FM_number;fmaddr_tmp>0;fmaddr_tmp--){
+				generate_modbus_data(&message,dtu_tmp,fmaddr_tmp);
+				sendto(sock,message0,strlen(message0),0,(struct sockaddr *)&server_addr,sizeof(server_addr));
+				addr_size=sizeof(server_addr);
+				printf("Message sent up0\n");
+				usleep(2000000);
+			}
+		}
 
 //	char * IPaddress=NULL;
 //	char message[]={"what's the fuck,where is my data???"};
@@ -92,35 +107,6 @@ int main (int argc,char* argv[]){
 		j=ModBusCRC16(hostcode,6);
 		hostcode[6] = j % 0x100;
 		hostcode[7] = j % 0x10000 / 0x100;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-		for(i=0;i<1000;i++){
-			sendto(sock,message0,strlen(message0),0,(struct sockaddr *)&server_addr,sizeof(server_addr));
-			addr_size=sizeof(server_addr);
-	//		str_len=recvfrom(sock,message,BUFF_SIZE,0,(struct sockaddr *)&server_addr,&addr_size);
-			printf("Message sent up0\n");
-			usleep(2000000);
-		}
 
 	}
 //print accepted message
@@ -204,20 +190,5 @@ uint32_t  ModBusCRC16(unsigned char *updata,unsigned int len)
  * xor code 0x0000
  * simple table and easy function
  *  * */
-
-char HostNodeUdpSend(listeningNode * tree){
-
-    uint32_t j = 0;
-    uint16_t i=0;
-    deviceNode * p =NULL;
-    modbusRegisterInfo * p1 = NULL;
-//		printf("hostcode:%s\n",hostcode);
-		sendto(serv_sock,hostcode,sizeof(hostcode),0,(struct sockaddr*)&(tree->clientAddr),sizeof(tree -> clientAddr));
-		p = p -> next;
-		if(p == tree -> headDevice)
-			break;
-	}
-	return 1;
-}
 
 
