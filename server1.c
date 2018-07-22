@@ -1,3 +1,17 @@
+/* @dark_jadeite
+ * 2018.7.22
+ * 测试用UDP发包器
+ * 默认条件：
+ * 1.起始DTUID为0
+ * 2.起始ModBus地址为0
+ * 3.默认发包频率1s
+ * 输入参数：
+ * 1.目标IP
+ * 2.目标端口
+ * 3.模拟DTU数量
+ * 4.每个ModBus总线模拟仪表数量
+ * 5.发包频率毫秒数
+*/
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -63,7 +77,8 @@ int main (int argc,char* argv[]){
 		sleep_time=atoi(argv[5]);
 		printf("数据包发送间隔%dms\n",sleep_time);
 		sleep_time*=1000;
-	}
+	}else
+		sleep_time=1000000;
 
 	printf("DTU数量%ld\n",setdata.DTU_number);
 	printf("ModBus总线中仪表数量%d\n",setdata.FM_number);
@@ -81,21 +96,22 @@ int main (int argc,char* argv[]){
 				memset(message,0x30,BUFF_SIZE);
 				sprintf(message,"%015d",dtu_tmp);
 				message[15]=fmaddr_tmp;
-				message[16]=20;
+				message[16]=3;
+				message[17]=20;
 				//这是5个数据都是222.1
 				//0x435e199a
 				for(i=0,j=0;i<5;i++){
-					message[17+j]=0x43;
-					message[18+j]=0x5e;
-					message[19+j]=0x19;
-					message[20+j]=0x9a;
+					message[18+j]=0x43;
+					message[19+j]=0x5e;
+					message[20+j]=0x19;
+					message[21+j]=0x9a;
 					j=i*4;
 				}
 				i=ModBusCRC16(message+15,23);
 				message[38] = i % 0x100;
 				message[39] = i % 0x10000 / 0x100;
 				for(i=0;i<BUFF_SIZE;i++)
-					printf("%x",message[i]);
+					printf("0x%x-",message[i]);
 				sendto(sock,message,BUFF_SIZE,0,(struct sockaddr *)&server_addr,sizeof(server_addr));
 				counter++;
 				printf("\nMessage counte %d\n",counter);
