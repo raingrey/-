@@ -467,8 +467,8 @@ uint32_t i;
 IPaddress=inet_ntoa(client_addr.sin_addr);
  udpmsgcounter++;
 printf("Message from %s ,udpmsgcounter:%ld,message: ",IPaddress,udpmsgcounter);
- for(i=0;i<sizeof(messages);i++)
-    printf("%x,",messages[i]);
+// for(i=0;i<sizeof(messages);i++)
+//    printf("%x,",messages[i]);
 printf("\n\n,");
             if((msg=(udpMsg *)malloc(sizeof(udpMsg)))!=NULL){
                 memset(msg,0,(sizeof(udpMsg)));

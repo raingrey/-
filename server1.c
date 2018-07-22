@@ -28,10 +28,11 @@ int main (int argc,char* argv[]){
 	int IPlen;
 	char* IPaddress;
 	int i,j;
+	int sleep_time;
 	user_input setdata; 
 	setdata.DTU_number=1000;
 	setdata.FM_number=30;
-	char message[BUFF_SIZE]={'3','5','6','5','6','6','0','7','0','9','0','3','4','4','0',0x08,0x03,0x14,0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x08,0x09,0x10,0x11,0x12,0x13,0x14,0x15,0x16,0x17,0x18,0x19,0x20,0xbe,0xa6};
+	uint8_t message[BUFF_SIZE]={'3','5','6','5','6','6','0','7','0','9','0','3','4','4','0',0x08,0x03,0x14,0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x08,0x09,0x10,0x11,0x12,0x13,0x14,0x15,0x16,0x17,0x18,0x19,0x20,0xbe,0xa6};
 	uint64_t dtu_tmp;
 	uint8_t fmaddr_tmp;
 //check argc if the parameter is legal
@@ -53,11 +54,17 @@ int main (int argc,char* argv[]){
 
 	}
 	if(argc > 4){
-		if(setdata.FM_number=atoi(argv[4])>256){
+		if((setdata.FM_number=atoi(argv[4]))>256){
 			setdata.FM_number=255;
 			printf("单ModBus总线中仪表数量超出255会被修改为255\n");
 		}
 	}
+	if(argc > 5){
+		sleep_time=atoi(argv[5]);
+		printf("数据包发送间隔%dms\n",sleep_time);
+		sleep_time*=1000;
+	}
+
 	printf("DTU数量%ld\n",setdata.DTU_number);
 	printf("ModBus总线中仪表数量%d\n",setdata.FM_number);
 	printf("目标地址%s:%d\n",inet_ntoa(server_addr.sin_addr),ntohs(server_addr.sin_port));
@@ -69,10 +76,10 @@ int main (int argc,char* argv[]){
 //还要把CRC校验的代码弄过来，在仪表伪装的部分有实现
 	int counter=0;
 	while(1){
-		for(dtu_tmp=setdata.DTU_number;dtu_tmp>0;dtu_tmp--){
-			for(fmaddr_tmp=setdata.FM_number;fmaddr_tmp>0;fmaddr_tmp--){
-				memset(message,0,BUFF_SIZE);
-				sprintf(message,"%d",dtu_tmp);
+		for(dtu_tmp=0;dtu_tmp<setdata.DTU_number;dtu_tmp++){
+			for(fmaddr_tmp=0;fmaddr_tmp<setdata.FM_number;fmaddr_tmp++){
+				memset(message,0x30,BUFF_SIZE);
+				sprintf(message,"%015d",dtu_tmp);
 				message[15]=fmaddr_tmp;
 				message[16]=20;
 				//这是5个数据都是222.1
@@ -92,7 +99,7 @@ int main (int argc,char* argv[]){
 				sendto(sock,message,BUFF_SIZE,0,(struct sockaddr *)&server_addr,sizeof(server_addr));
 				counter++;
 				printf("\nMessage counte %d\n",counter);
-				usleep(2000000);
+				usleep(sleep_time);
 			}
 		}
 	}

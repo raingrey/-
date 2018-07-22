@@ -95,6 +95,14 @@ char RBTListeningNodeCheck();
 //该伪装主机了
 char HostNodeUdpSend(listeningNode * tree);
 
+char * get_str_time_now()
+{
+	time_t now;
+	struct tm * timenow;
+	time(&now);
+	timenow=localtime(&now);
+	return asctime(timenow);
+}
 void * ThreadDataProcess(void * arg){
 
     //temp for listeningNodeRoot
@@ -143,10 +151,15 @@ void * ThreadDataProcess(void * arg){
 
     //meter data  node to save
 	meterDataPrimary * meterdataprimary=NULL;
-    meterDataSecondary * meterdatasecondary =NULL;
+	meterDataSecondary * meterdatasecondary =NULL;
 
+	time_t now;
+	printf("数据处理线程已经就绪——时间—%s",get_str_time_now());
+	uint32_t counter=0;
+	uint32_t sleep_counter=0;
+	uint32_t effective_counter=0;
 	while(1){
-		printf("数据处理线程已经就绪");
+		printf("数据处理线程——第%d————次处理数据,时间-%s",++counter,get_str_time_now());
 		if(RBTListeningNodeNumber){
 			RBTListeningNodeNumber=0;
 			RBTListeningNodeCheck();
@@ -159,6 +172,7 @@ void * ThreadDataProcess(void * arg){
 		////imodbus is for length of modbus data
 		while(!(p = UdpMsgNodeWaitingForHandle())){
 			pthread_cond_wait(&condDataProcess,&mtx);
+			printf("数据处理线程第————%d————次睡眠,时间-%s",++sleep_counter,get_str_time_now());
 			//if thread resume back to while(1)
 			//continue;
 		}
@@ -646,21 +660,22 @@ printf("\ndataprocessconter: %d ,DTUID: %ld --- heartBeatNumber: %d,imodbus:%d\n
 //
 //2.5.3 send meterdata to it's link
         pthread_mutex_lock(&data_save_mtx);
+	printf("数据处理线程第————%d————次发现有效数据,时间-%s",++effective_counter,get_str_time_now());
         if(primarydatasign){
             meterdataprimary -> next= meterDataPrimaryHead;
             meterDataPrimaryHead = meterdataprimary;
             meterdataprimary= NULL;
-			MeterDataNumber++;
+		MeterDataNumber++;
         }
         if(secondarydatasign){
             meterdatasecondary -> next= meterDataSecondaryHead;
             meterDataSecondaryHead = meterdatasecondary;
             meterdatasecondary=NULL;
-			MeterDataNumber++;
+		MeterDataNumber++;
         }
-		if(MeterDataNumber>10){
-			pthread_cond_signal(&condDataSave);
-		}
+	if(MeterDataNumber>10){
+		pthread_cond_signal(&condDataSave);
+	}
         pthread_mutex_unlock(&data_save_mtx);
 	}
 //2.5.3 send meterdata to it's link
