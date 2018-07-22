@@ -146,6 +146,7 @@ void * ThreadDataProcess(void * arg){
     meterDataSecondary * meterdatasecondary =NULL;
 
 	while(1){
+		printf("数据处理线程已经就绪");
 		if(RBTListeningNodeNumber){
 			RBTListeningNodeNumber=0;
 			RBTListeningNodeCheck();

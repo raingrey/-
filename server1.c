@@ -5,13 +5,11 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 
-#define BUFF_SIZE 578
+#define BUFF_SIZE 40
 void error_handling(char *message);
 typedef struct{
-	uint32_t DTU_number;
+	uint64_t DTU_number;
 	uint32_t FM_number;
-	uint8_t start_DTU[15]={'3','5','6','5','6','6','0','7','0','9','0','3','4','4','0'};
-	uint32_t data_size;
 }user_input;
 
 char generate_modbus_data(int dtu_tmp,int fmaddr_tmp);
@@ -25,22 +23,30 @@ int main (int argc,char* argv[]){
 	socklen_t addr_size;
     	uint8_t hostcode[8]={0};
 //table to save accepted string
-	char message[BUFF_SIZE]={'3','5','6','5','6','6','0','7','0','9','0','3','4','4','0',0x08,0x03,0x14,0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x08,0x09,0x10,0x11,0x12,0x13,0x14,0x15,0x16,0x17,0x18,0x19,0x20,0xbe,0xa6};
 //length of accepted string
 	int str_len=0;
 	int IPlen;
 	char* IPaddress;
-	int i=0;
+	int i,j;
 	user_input setdata; 
 	setdata.DTU_number=1000;
 	setdata.FM_number=30;
-	int dtu_tmp,fmaddr_tmp;
-	uint8_t dtu_traversal[15]={0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
-	uint8_t dtu_traversal_[15]={0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+	char message[BUFF_SIZE]={'3','5','6','5','6','6','0','7','0','9','0','3','4','4','0',0x08,0x03,0x14,0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x08,0x09,0x10,0x11,0x12,0x13,0x14,0x15,0x16,0x17,0x18,0x19,0x20,0xbe,0xa6};
+	uint64_t dtu_tmp;
+	uint8_t fmaddr_tmp;
 //check argc if the parameter is legal
+//create client socket, set protocol and connect type
+	sock=socket(PF_INET,SOCK_DGRAM,0);
+//initialize memory applyed by server_addr
+	memset(&server_addr,0,sizeof(server_addr));
+	server_addr.sin_family=AF_INET;
 	if(argc < 3){
-		printf("<IP> Address and <PORT> number to connect is needed\n",argv[0]);
-		exit(1);
+		printf("未输入IP地址，将采用39.106.62.239:3389\n");
+		server_addr.sin_addr.s_addr=inet_addr("39.106.62.239");
+		server_addr.sin_port=htons(3389);
+	}else{
+		server_addr.sin_addr.s_addr=inet_addr(argv[1]);
+		server_addr.sin_port=htons(atoi(argv[2]));
 	}
 	if(argc > 3){
 		setdata.DTU_number=atoi(argv[3]);
@@ -52,39 +58,45 @@ int main (int argc,char* argv[]){
 			printf("单ModBus总线中仪表数量超出255会被修改为255\n");
 		}
 	}
-	if(argc > 5){
-		if(setdata.data_size=atoi(argv[5])>256){
-			setdata.data_size=255;
-			printf("单ModBus总线中仪表数量超出255会被修改为255\n");
-		}
-	}
-	printf("DTU数量\n",setdata.DTU_number);
-	printf("ModBus总线中仪表数量\n",setdata.FM_number);
-	printf("仪表数据大小\n",setdata.data_size);
+	printf("DTU数量%ld\n",setdata.DTU_number);
+	printf("ModBus总线中仪表数量%d\n",setdata.FM_number);
+	printf("目标地址%s:%d\n",inet_ntoa(server_addr.sin_addr),ntohs(server_addr.sin_port));
 	
 //2018.7.17
 //@dark_jadeite
 //写完用户带参数输入的解析，小媳妇快饿死了，先去看看小媳妇。
 //明天继续写根据用户输入来调整DTUID，和仪表地址
 //还要把CRC校验的代码弄过来，在仪表伪装的部分有实现
-//create client socket, set protocol and connect type
-	sock=socket(PF_INET,SOCK_DGRAM,0);
-//initialize memory applyed by server_addr
-	memset(&server_addr,0,sizeof(server_addr));
-	server_addr.sin_family=AF_INET;
-	server_addr.sin_addr.s_addr=inet_addr(argv[1]);
-	server_addr.sin_port=htons(atoi(argv[2]));
+	int counter=0;
 	while(1){
 		for(dtu_tmp=setdata.DTU_number;dtu_tmp>0;dtu_tmp--){
 			for(fmaddr_tmp=setdata.FM_number;fmaddr_tmp>0;fmaddr_tmp--){
-				generate_modbus_data(&message,dtu_tmp,fmaddr_tmp);
-				sendto(sock,message0,strlen(message0),0,(struct sockaddr *)&server_addr,sizeof(server_addr));
-				addr_size=sizeof(server_addr);
-				printf("Message sent up0\n");
+				memset(message,0,BUFF_SIZE);
+				sprintf(message,"%d",dtu_tmp);
+				message[15]=fmaddr_tmp;
+				message[16]=20;
+				//这是5个数据都是222.1
+				//0x435e199a
+				for(i=0,j=0;i<5;i++){
+					message[17+j]=0x43;
+					message[18+j]=0x5e;
+					message[19+j]=0x19;
+					message[20+j]=0x9a;
+					j=i*4;
+				}
+				i=ModBusCRC16(message+15,23);
+				message[38] = i % 0x100;
+				message[39] = i % 0x10000 / 0x100;
+				for(i=0;i<BUFF_SIZE;i++)
+					printf("%x",message[i]);
+				sendto(sock,message,BUFF_SIZE,0,(struct sockaddr *)&server_addr,sizeof(server_addr));
+				counter++;
+				printf("\nMessage counte %d\n",counter);
 				usleep(2000000);
 			}
 		}
-
+	}
+/*
 //	char * IPaddress=NULL;
 //	char message[]={"what's the fuck,where is my data???"};
 		for(i=0;i<1000;i++){
@@ -109,6 +121,7 @@ int main (int argc,char* argv[]){
 		hostcode[7] = j % 0x10000 / 0x100;
 
 	}
+*/
 //print accepted message
 	close(sock);
 

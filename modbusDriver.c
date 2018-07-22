@@ -411,6 +411,7 @@ int main(int argc,char *argv[])
 	serv_addr.sin_addr.s_addr=htonl(INADDR_ANY);
 //set server port 
 	serv_addr.sin_port=htons(server_port);
+	printf("监听端口%d\n",ntohs(serv_addr.sin_port));
 //bind serv_addr info to serv_sock
 	if(bind(serv_sock,(struct sockaddr *)&serv_addr,sizeof(serv_addr))==-1){
 		printf("bind() error");
