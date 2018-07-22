@@ -39,9 +39,10 @@ i=0
 while [ $i -le $maxDTUID ]
 do
 	j=0
+	startDeviceNumber=0
 	while [ $j -le $maxDeviceNumber ]
 	do
-		meterName="仪表$meterID"
+		meterName="仪表$startMeterID"
 		mysql -u root<<EOF
 		use tcp;
 		insert into MeterIdentify(meterID,DTUID,deviceNumber,meterName)values($startMeterID,$startDTUID,$startDeviceNumber,'$meterName');

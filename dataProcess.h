@@ -5,6 +5,7 @@
 void * ThreadDataProcess(void * arg);
 
 char checkThreadPool(pthread_t tidself);
+char * get_str_time_now();
 
 
 #define FREEUDPMSG 0xffffffff

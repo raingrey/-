@@ -159,7 +159,6 @@ void * ThreadDataProcess(void * arg){
 	uint32_t sleep_counter=0;
 	uint32_t effective_counter=0;
 	while(1){
-		printf("数据处理线程——第%d————次处理数据,时间-%s",++counter,get_str_time_now());
 		if(RBTListeningNodeNumber){
 			RBTListeningNodeNumber=0;
 			RBTListeningNodeCheck();
@@ -171,8 +170,9 @@ void * ThreadDataProcess(void * arg){
 		pthread_mutex_lock(&mtx);
 		////imodbus is for length of modbus data
 		while(!(p = UdpMsgNodeWaitingForHandle())){
-			pthread_cond_wait(&condDataProcess,&mtx);
 			printf("数据处理线程第————%d————次睡眠,时间-%s",++sleep_counter,get_str_time_now());
+			pthread_cond_wait(&condDataProcess,&mtx);
+		printf("数据处理线程——第%d————次醒来处理数据,时间-%s",++counter,get_str_time_now());
 			//if thread resume back to while(1)
 			//continue;
 		}
@@ -181,7 +181,7 @@ void * ThreadDataProcess(void * arg){
 		pthread_mutex_unlock(&mtx);
 
 		//cut dtuid char
-        strncpy(dtuidstrtmp,p -> msg,DTUIDSIZE);
+	        strncpy(dtuidstrtmp,p -> msg,DTUIDSIZE);
 		// check if it is digital
 		i=0;
 		while(dtuidstrtmp[i]>='0'&&dtuidstrtmp[i]<='9')i++;
@@ -751,9 +751,10 @@ udpMsg * UdpMsgNodeWaitingForHandle(){
 }
 
 int GetMeterID(udpMsg * p,uint8_t * dtuidstrtmp,uint8_t addrstrtmp){
-    uint8_t querystrtmp[MYSQLQUERYSTRSIZE] = {0};
+	uint8_t querystrtmp[MYSQLQUERYSTRSIZE] = {0};
 	int meterid=0;
-    sprintf(querystrtmp,"select meterID from MeterIdentify where DTUID=%s and deviceNumber=%d",dtuidstrtmp,addrstrtmp);
+	sprintf(querystrtmp,"select meterID from MeterIdentify where DTUID=%s and deviceNumber=%d",dtuidstrtmp,addrstrtmp);
+//	printf("%s",querystrtmp);
 	MYSQL_RES * mysqlres=NULL;
 	MYSQL_ROW mysqlrow;
 	if(mysql_real_query(sql,querystrtmp,strlen(querystrtmp))){
@@ -1132,7 +1133,7 @@ char HostNodeUdpSend(listeningNode * tree){
 
 char RBTListeningNodeCheck(){
 	int i=0;
-    struct rb_node * node= rb_first(&listeningNodeRoot);
+	struct rb_node * node= rb_first(&listeningNodeRoot);
     for (; node; node = rb_next(node)){
         listeningNode * p = rb_entry(node, struct listeningNode, node);
         printf("key = %ld\n", p->DTUID);

@@ -22,37 +22,50 @@
 char SendBackMeterDataPrimaryNode(meterDataPrimary * p);
 char SendBackMeterDataSecondaryNode(meterDataSecondary* p);
 
-
-
 void * ThreadDataSave(void * arg){
 
 	meterDataPrimary * p=NULL;
 	meterDataSecondary * p1=NULL;
 	uint8_t querystrtmp[MYSQLQUERYSTRSIZE] = {0};
+	printf("数据保存线程已经就绪——时间—%s",get_str_time_now());
+	uint32_t counter=0;
+	uint32_t sleep_counter=0;
+	uint32_t effective_counter=0;
 	while(1){
+		p=NULL;
+		p1=NULL;
 		pthread_mutex_lock(&data_save_mtx);
+//if there has no meter data to save hung up thread
+		while((meterDataPrimaryHead == NULL)&&(meterDataSecondaryHead == NULL)){
+			printf("数据保存线程第————%d————次睡眠,时间-%s",++sleep_counter,get_str_time_now());
+			pthread_cond_wait(&condDataSave,&data_save_mtx);
+			printf("数据保存线程第————%d————次唤醒,时间-%s",++counter,get_str_time_now());
+		}
 //1.1 cut node from one-way link-list meterdataprimary 
 		if(meterDataPrimaryHead){
 			p=meterDataPrimaryHead;
 			if(p->next)
 				meterDataPrimaryHead = p -> next;
+			else
+				meterDataPrimaryHead = NULL;
 		}
-		
 //2.1 cut is from one-way link-list meterdatasecondary 
 		if(meterDataSecondaryHead){
 			p1=meterDataSecondaryHead;
 			if(p1->next!=p1)
 				meterDataSecondaryHead = p1 -> next;
+			else
+				meterDataSecondaryHead = NULL;
 		}
 		pthread_mutex_unlock(&data_save_mtx);
 //1.2 if there is a node to handle
 		if(p){
 //1.3 insert meterdataprimary to mysql
-            sprintf(querystrtmp,"insert into MeterDataPrimary "
+			sprintf(querystrtmp,"insert into MeterDataPrimary "
                                 "(meterID,instantflow,totalFlow,T,P,DP,timestamp)"
                                 "values(%d,%f,%ld,%f,%f,%f,'%s')",
-                    p -> meterID,p -> instantFlow,p -> totalFlow,p -> T,p -> P,p -> DP,p -> timestamp);
-            if(mysql_real_query(sqlDataSave,querystrtmp,strlen(querystrtmp))){
+			p -> meterID,p -> instantFlow,p -> totalFlow,p -> T,p -> P,p -> DP,p -> timestamp);
+			if(mysql_real_query(sqlDataSave,querystrtmp,strlen(querystrtmp))){
 				printf("%s\n",mysql_error(sqlDataSave));
 				pthread_mutex_lock(&data_save_mtx);
 				SendBackMeterDataPrimaryNode(p);
@@ -69,7 +82,7 @@ printf("meterDataPrimary has been saved\n");
 //2.2 if there is a meterdatasecondary data
 		if(p1){
 //2.3 insert meterdatasecondary to mysql
-            sprintf(querystrtmp,"insert into MeterDataSecondary"
+           		 sprintf(querystrtmp,"insert into MeterDataSecondary"
                                 " (meterID,order7,order8,order9,"
                                 "order10,order11,order12,order13,"
                                 "order14,order15,order16,order17,order18,"
@@ -77,38 +90,24 @@ printf("meterDataPrimary has been saved\n");
                                 "values"
                                 "(%d,'%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s',"
                                 "'%s','%s','%s')",
-                    p1 -> meterID,p1 -> order7,p1 -> order8,p1 -> order9,
-                    p1 -> order10,p1 -> order11,p1 -> order13,p1 -> order14,
-                    p1 -> order15,p1 -> order16,p1 -> order17,p1 -> order18,
-                    p1 -> order19,p1 -> order20,p1 -> timestamp);
-            //printf("%s\n",querystrtmp);
-            if(mysql_real_query(sqlDataSave,querystrtmp,strlen(querystrtmp))){
-                printf("%s\n",mysql_error(sqlDataSave));
-                pthread_mutex_lock(&data_save_mtx);
-				//无法存入时超过8次会被丢弃
-                SendBackMeterDataSecondaryNode(p1);
-                pthread_mutex_unlock(&data_save_mtx);
-                p1=NULL;
-            }else{
-printf("meterDataSecondary has been saved\n");
+				p1 -> meterID,p1 -> order7,p1 -> order8,p1 -> order9,
+				p1 -> order10,p1 -> order11,p1 -> order13,p1 -> order14,
+				p1 -> order15,p1 -> order16,p1 -> order17,p1 -> order18,
+				p1 -> order19,p1 -> order20,p1 -> timestamp);
+		    //printf("%s\n",querystrtmp);
+			if(mysql_real_query(sqlDataSave,querystrtmp,strlen(querystrtmp))){
+				printf("%s\n",mysql_error(sqlDataSave));
+				pthread_mutex_lock(&data_save_mtx);
+					//无法存入时超过8次会被丢弃
+				SendBackMeterDataSecondaryNode(p1);
+				pthread_mutex_unlock(&data_save_mtx);
+				p1=NULL;
+			}else{
+				printf("meterDataSecondary has been saved\n");
 				free(p1);
 				p1= NULL;
 			}
 		}
-        //if there has no meter data to save hung up thread
-		if((p == meterDataPrimaryHead)&&(p1 == meterDataSecondaryHead)){
-			pthread_mutex_lock(&data_save_mtx);
-			pthread_cond_wait(&condDataSave,&data_save_mtx);
-			//if thread resume back to while(1)
-			pthread_mutex_unlock(&data_save_mtx);
-			continue;
-		}else{
-			continue;
-		}
-	}
-	if(arg!=NULL){
-		free(arg);
-		arg = NULL;
 	}
 }
 

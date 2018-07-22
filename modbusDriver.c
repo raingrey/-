@@ -522,27 +522,34 @@ void * ThreadLNManager(){
 	//1.1 handle udpmsg two way link
 	//
 		
+		printf("ThreadLNManager将要-----------获取------------锁data_save_mtx\n");
 		pthread_mutex_lock(&data_save_mtx);
+		printf("ThreadLNManager-----------获取锁成功------------data_save_mtx\n");
 		meterDataPrimary * p1 = meterDataPrimaryHead;
 		meterDataSecondary * p2 = meterDataSecondaryHead;
 	//1.2 handle meterdataprimary and meterdatasecondary two way link
 		MeterDataNumber=0;
 		while((p1)){
+			MeterDataNumber++;
 			if(p1->next)
 				p1 = p1 -> next;
-			MeterDataNumber++;
+			else
+				break;
 		}
 	//1.2.1 handle meterdatasecondary two way link
 		while((p2)){
+			MeterDataNumber++;
 			if(p2 -> next)
 				p2 = p2 -> next;
-			MeterDataNumber++;
+			else
+				break;
 		}
+		printf("ThreadLNManager将要-----------释放-----------锁data_save_mtx\n");
+		pthread_mutex_unlock(&data_save_mtx);
 		if(MeterDataNumber>0){
 			pthread_cond_signal(&condDataSave);
 		}
 		
-		pthread_mutex_lock(&data_save_mtx);
 //		ThreadAdjust();
 //////////////thread monopoly
 ///
