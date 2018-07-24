@@ -167,7 +167,7 @@
  *                    * */
 #define UDPNODESENDBACKTIMECRITCAL 8
 typedef struct udpMsg{
-        char status;
+//        char status;
         struct sockaddr_in clientAddr;
         uint8_t msg[BUFF_SIZE];
         struct udpMsg * next;

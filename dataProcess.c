@@ -62,7 +62,7 @@ modbusRegisterInfo * CreateModBusRegisterInfoCircleFromMysql(deviceNode *p1);
 /*handle data link*/
 //if udp node can't be processed because of system,sent it back
 //this have critical number for it's send back
-char SendBackUdpMsgNode(udpMsg * p);
+//char SendBackUdpMsgNode(udpMsg * p);
 
 //check if there is udp node waiting for handle
 udpMsg * UdpMsgNodeWaitingForHandle();
@@ -783,7 +783,7 @@ int GetMeterID(udpMsg * p,uint8_t * dtuidstrtmp,uint8_t addrstrtmp){
  * int	is meterID
  * * */
 
-
+/*
 char SendBackUdpMsgNode(udpMsg * p){
 	//insert p back to one-way link-list's head
     p->status++;
@@ -792,7 +792,7 @@ char SendBackUdpMsgNode(udpMsg * p){
     return 1;
 	//insert p back to one-way link-list's head
 }
-
+*/
 modbusRegisterInfo * CreateModBusRegisterInfoCircleFromMysql(deviceNode * p1){
 
     uint8_t querystrtmp[MYSQLQUERYSTRSIZE] = {0};
