@@ -450,44 +450,41 @@ int main(int argc,char *argv[])
 	pthread_create(&ThreadFixedDataSave,NULL,ThreadDataSave,NULL);
 	//1.create a thread manage listeningNode;
 	pthread_create(&ThreadFixedManager,NULL,ThreadLNManager,NULL);
+	//get sizeof client IPAddress for function recvfrom()
+	client_addr_size=sizeof(client_addr);
 
-
-//ip address for print out
-char* IPaddress=NULL;
-long udpmsgcounter=0;
-uint32_t i;
+	//ip address for print out
+	char* IPaddress=NULL;
+	long udpmsgcounter=0;
+	uint32_t i;
 	while(1){
-//get sizeof client IPAddress for function recvfrom()
-		client_addr_size=sizeof(client_addr);
-
-		memset(messages,0,BUFF_SIZE);
-//listen and accept a request,program will blocking here
-		if(recvfrom(serv_sock,messages,BUFF_SIZE,0,(struct sockaddr *)&client_addr,&client_addr_size)!=-1){
-
-IPaddress=inet_ntoa(client_addr.sin_addr);
- udpmsgcounter++;
-printf("Message from %s ,udpmsgcounter:%ld,message: ",IPaddress,udpmsgcounter);
-// for(i=0;i<sizeof(messages);i++)
-//    printf("%x,",messages[i]);
-printf("\n\n,");
-            if((msg=(udpMsg *)malloc(sizeof(udpMsg)))!=NULL){
-                memset(msg,0,(sizeof(udpMsg)));
-                memcpy(msg->msg,messages,BUFF_SIZE);
-                msg -> clientAddr=client_addr;
-
-        //insert to two-way link-list's head
-		pthread_mutex_lock(&mtx);
-		
-		msg -> next = udpMsgHead -> next;
-		udpMsgHead -> next = msg;
-		UdpMsgNumber++;
-		//InsertToUdpMsgLink(msg);
-		//insert to two-way link-list's head
-		if(UdpMsgNumber>10){
-			pthread_cond_signal(&condDataProcess);
+		if(msg=(udpMsg *)malloc(sizeof(udpMsg))){
+			printf("udp listeningNode out of memory");
+			continue;
 		}
-		pthread_mutex_unlock(&mtx);
-            }else	printf("udp listeningNode out of memory");
+		memset(msg,0,(sizeof(udpMsg)));
+
+//listen and accept a request,program will blocking here
+		if(recvfrom(serv_sock,(char*)(msg.msg),BUFF_SIZE,0,
+			(struct sockaddr *)&client_addr,&client_addr_size)!=-1){
+			IPaddress=inet_ntoa(client_addr.sin_addr);
+			 udpmsgcounter++;
+			printf("Message from %s ,udpmsgcounter:%ld,message: ",IPaddress,udpmsgcounter);
+			// for(i=0;i<sizeof(messages);i++)
+			//    printf("%x,",messages[i]);
+			printf("\n\n,");
+			msg -> clientAddr=client_addr;
+			//insert to two-way link-list's head
+			pthread_mutex_lock(&mtx);
+			msg -> next = udpMsgHead -> next;
+			udpMsgHead -> next = msg;
+			UdpMsgNumber++;
+			//InsertToUdpMsgLink(msg);
+			//insert to two-way link-list's head
+			pthread_mutex_unlock(&mtx);
+			if(UdpMsgNumber>10){
+				pthread_cond_signal(&condDataProcess);
+			}
         }
     }
 //	pthread_detach(t_id);
