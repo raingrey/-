@@ -329,7 +329,7 @@ int main(int argc,char *argv[])
 //length of client address 
 	socklen_t client_addr_size;
 //buffer for udp message
-	char messages[BUFF_SIZE]={};
+//	char messages[BUFF_SIZE]={};
 	char user[20]={"root"};
 	char passwd[30]={"ytfy1032744819"};
 	char database_name[30]={"tcp"};
