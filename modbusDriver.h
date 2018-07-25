@@ -233,7 +233,7 @@ typedef struct mBDS{
 #define ListeningNodeUnknownFunctionCode 5
 #define ListeningNodeListening 4
 typedef struct listeningNode {
-    char MBStatus;
+    uint32_t MBStatus;
     uint32_t heartBeat;
     struct rb_node node;
     uint64_t DTUID;
@@ -276,7 +276,7 @@ typedef struct deviceNode{
  * */
 #define METERDATAPRIMARYSAVECOUNTCRITICAL 8
 typedef struct meterDataPrimary{
-        char sC;
+        int sC;
         int meterID;
         float instantFlow;
         unsigned long int totalFlow;
@@ -289,7 +289,7 @@ typedef struct meterDataPrimary{
 
 #define METERDATASECONDARYSAVECOUNTCRITICAL 8
 typedef struct meterDataSecondary{
-    char sC;
+    int sC;
     int meterID;
     uint8_t timestamp[10];
 	uint8_t order7[20];
