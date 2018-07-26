@@ -228,10 +228,10 @@ typedef struct mBDS{
 	uint16_t CRC;
 	uint8_t mBD[BUFF_SIZE-20];
 }mBDS;
-#define ListeningNodeHost 7
+//#define ListeningNodeHost 7
 #define ListeningNodeHeartBeat 6
-#define ListeningNodeUnknownFunctionCode 5
-#define ListeningNodeListening 4
+//#define ListeningNodeUnknownFunctionCode 5
+//#define ListeningNodeListening 4
 typedef struct listeningNode {
     uint32_t MBStatus;
     uint32_t heartBeat;

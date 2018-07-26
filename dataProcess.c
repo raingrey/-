@@ -276,7 +276,7 @@ void * ThreadDataProcess(void * arg){
 				p=NULL;
 			}
 			//if there is a listeningNode,change it's status
-			if(p1 -> MBStatus != ListeningNodeHost)
+//			if(p1 -> MBStatus != ListeningNodeHost)
 				p1 -> MBStatus = ListeningNodeHeartBeat;
             p1 -> dumpTime=time(NULL);
 			//if thread resume back to while(1)
@@ -390,8 +390,8 @@ printf("\ndataprocessconter: %d ,DTUID: %ld --- heartBeatNumber: %d,imodbus:%d\n
 				free(p);
 				p=NULL;
 			}
-			if(p1 -> MBStatus != ListeningNodeHost)
-				p1 -> MBStatus = ListeningNodeUnknownFunctionCode;
+//			if(p1 -> MBStatus != ListeningNodeHost)
+//				p1 -> MBStatus = ListeningNodeUnknownFunctionCode;
             p1 -> dumpTime=time(NULL);
             //if thread resume back to while(1)
 			continue;
@@ -403,7 +403,7 @@ printf("\ndataprocessconter: %d ,DTUID: %ld --- heartBeatNumber: %d,imodbus:%d\n
 		//if data fit with host data size,check if position of byte number counter is fit with register data number
         if((imodbus == MODBUSHOSTDATASIZE)&&(mbds.bN!= 3)){
 			//if p1 is host status ,change it to listening status;	
-			p1 -> MBStatus = ListeningNodeListening;
+//			p1 -> MBStatus = ListeningNodeListening;
 			p1 -> heartBeat=0;
 			//3is the byte number when the length of modbus data is 8, this is host data,analysis it
 			//get it's start register 
@@ -475,8 +475,8 @@ printf("\ndataprocessconter: %d ,DTUID: %ld --- heartBeatNumber: %d,imodbus:%d\n
         if(i!=mbds.bN){
             printf("\nAlarm:modbus data has broken,not comfort to mysql's register info for meterid:%d 's data analsys",meterid);
 			p1 -> heartBeat = 0;
-			if(p1 -> MBStatus != ListeningNodeHost)
-				p1 -> MBStatus = ListeningNodeListening;
+//			if(p1 -> MBStatus != ListeningNodeHost)
+//				p1 -> MBStatus = ListeningNodeListening;
 			if(p != NULL){
 				free(p);
 				p=NULL;
