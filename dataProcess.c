@@ -180,32 +180,11 @@ void * ThreadDataProcess(void * arg){
 		//unlock thread
 		pthread_mutex_unlock(&mtx);
 
-		//cut dtuid char
-	        strncpy(dtuidstrtmp,p -> msg,DTUIDSIZE);
-		// check if it is digital
-		i=0;
-		while(dtuidstrtmp[i]>='0'&&dtuidstrtmp[i]<='9')i++;
-		// if it is not digital,free resource and wait the thread
-//1.4remove situation DTUID is not [0~9]
-		if(i <  DTUIDSIZE){
-			if(p!=NULL){
-				free(p);
-				p = NULL;
-			}
-			// if thread resume back to while(1)
-			continue;
-		}
-/*data is incorrec thung up thread and turn back to while  */
-/*data is incorrec thung up thread and turn back to while  */
-/*data is incorrec thung up thread and turn back to while  */
-//1.0
-
-
 //2.0
 /*data is correct ,from now udpMsg is confirmed have DTUID,so i can add it to listeningNode RBT*/
 /*data is correct ,from now udpMsg is confirmed have DTUID,so i can add it to listeningNode RBT*/
 /*data is correct ,from now udpMsg is confirmed have DTUID,so i can add it to listeningNode RBT*/
-
+		strncpy(dtuidstrtmp,p -> msg,DTUIDSIZE);
 		//transmitt dtuid char to long
 		dtuid=atol(dtuidstrtmp);
 
@@ -223,23 +202,6 @@ void * ThreadDataProcess(void * arg){
 			memset(p1,0,(sizeof(listeningNode)));
 			//set new listeningNode's dtuid
 			p1 -> DTUID = dtuid;
-/*
-            if((p1 -> headDevice = (deviceNode *)malloc(sizeof(deviceNode))) == NULL){
-                printf("out of memory when apply deviceNode ");
-                continue;
-            }
-            memset(p1->headDevice,0,sizeof(deviceNode));
-            p1 -> headDevice -> next = p1 -> headDevice;
-
-            if((p1 -> headDevice -> modbusRegisterInfoHead =
-                (modbusRegisterInfo *)malloc(sizeof(modbusRegisterInfo))) == NULL){
-                printf("modbusRegisterInfo out of memory");
-                continue;
-            }
-            memset(p1->headDevice -> modbusRegisterInfoHead,0,sizeof(modbusRegisterInfo));
-            p1 -> headDevice -> modbusRegisterInfoHead -> next =
-                    p1 -> headDevice -> modbusRegisterInfoHead;
-                    */
             //reset listeningNode's dumptime
             p1 -> dumpTime=time(NULL);
             p1 -> clientAddr = p -> clientAddr;
@@ -264,20 +226,11 @@ void * ThreadDataProcess(void * arg){
 //2.2 udp data and listeningNode is ready,now we will handle it
 
 //2.2.1 handle heart beat data
-		strncpy(heartbeatstrtmp,p -> msg+DTUIDSIZE,sizeof(HEARTBEATSTR)); 
-		if(!strcmp(heartbeatstrtmp,HEARTBEATSTR)){
-			//search if there is a listeningNode have same DTUID
-			//lock thread search listeningNodeRoot
+		if(!memcmp(p -> msg+DTUIDSIZE,HEARTBEATSTR),sizeof(HEARTBEATSTR)){
 			//if there is a listeningNode,count it's heart beat
 			p1 -> heartBeat++;
-			//if there is a listeningNode,save it's IP address
-			if(p != NULL){
-				free(p);
-				p=NULL;
-			}
-			//if there is a listeningNode,change it's status
-//			if(p1 -> MBStatus != ListeningNodeHost)
-				p1 -> MBStatus = ListeningNodeHeartBeat;
+			free(p);
+			p=NULL;
             p1 -> dumpTime=time(NULL);
 			//if thread resume back to while(1)
 			continue;

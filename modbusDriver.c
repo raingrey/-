@@ -458,14 +458,14 @@ int main(int argc,char *argv[])
 	long udpmsgcounter=0;
 	uint32_t i;
 	while(1){
-		if(msg=(udpMsg *)malloc(sizeof(udpMsg))){
+		if(!(msg||msg=(udpMsg *)malloc(sizeof(udpMsg))){
 			printf("udp listeningNode out of memory");
 			continue;
 		}
 		memset(msg,0,(sizeof(udpMsg)));
 
 //listen and accept a request,program will blocking here
-		if(recvfrom(serv_sock,(char*)(msg.msg),BUFF_SIZE,0,
+		if(recvfrom(serv_sock,(char*)(msg->msg),BUFF_SIZE,0,
 			(struct sockaddr *)&client_addr,&client_addr_size)!=-1){
 			IPaddress=inet_ntoa(client_addr.sin_addr);
 			 udpmsgcounter++;
@@ -474,14 +474,17 @@ int main(int argc,char *argv[])
 			//    printf("%x,",messages[i]);
 			printf("\n\n,");
 			msg -> clientAddr=client_addr;
+			
+			for(i=0;i<DTUIDSIZE;i++)
+				if(msg->msg[i]<'0'||msg->msg[i]>'9')
+						continue;
 			//insert to two-way link-list's head
 			pthread_mutex_lock(&mtx);
 			msg -> next = udpMsgHead -> next;
 			udpMsgHead -> next = msg;
 			UdpMsgNumber++;
-			//InsertToUdpMsgLink(msg);
-			//insert to two-way link-list's head
 			pthread_mutex_unlock(&mtx);
+			msg=NULL;
 			if(UdpMsgNumber>10){
 				pthread_cond_signal(&condDataProcess);
 			}
