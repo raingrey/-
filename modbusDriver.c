@@ -458,7 +458,7 @@ int main(int argc,char *argv[])
 	long udpmsgcounter=0;
 	uint32_t i;
 	while(1){
-		if(!(msg||msg=(udpMsg *)malloc(sizeof(udpMsg))){
+		if((msg||msg=(udpMsg *)malloc(sizeof(udpMsg))){
 			printf("udp listeningNode out of memory");
 			continue;
 		}

@@ -237,7 +237,7 @@ void * ThreadDataProcess(void * arg){
 		}
 //2.2.1 manage heart beat data
 
-        //No.3 byte is modbus data number,so add 2 to point
+        //对于有效ModBus仪表数据，在DTU+2指针取得肯定是ModBus消息长度，+5是将ModBus地址、功能码、长度码、CRC校验码算入
         imodbus=*(p -> msg + DTUIDSIZE + 2)+ 5;
 
         //place modbus data
