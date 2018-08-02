@@ -329,7 +329,6 @@ typedef struct meterDataSecondary{
 extern threadPoolInfo ThreadPool[MAXDATAPROCESSSAVETHREADNUMBER]; 
 
 
-extern struct rb_root listeningNodeRoot;
 extern pthread_mutex_t mtx;
 extern pthread_mutex_t data_save_mtx;
 
@@ -362,28 +361,6 @@ extern MYSQL *sqlDataSave;
 extern serv_sock;
 
 uint32_t  ModBusCRC16(unsigned char *updata,unsigned int len);
-
-struct listeningNode * RBTSearch(struct rb_root *root, uint64_t dtuid);
-int RBTInsert(struct rb_root *root, struct listeningNode *data);
-///urgent: this is important
-/// for every time every code line
-/// if a pointer is freed(by free() or by defined function())
-/// this pointer should be set NULL
-/// in line after freefunction
-void RBTFree(struct listeningNode *node);
-///urgent: this is important
-/// for every time every code line
-/// if a pointer is freed(by free() or by defined function())
-/// this pointer should be set NULL
-/// in line after freefunction
-uint8_t FreeModBusRegisterInfoCircle(modbusRegisterInfo * p1);
-///urgent: this is important
-/// for every time every code line
-/// if a pointer is freed(by free() or by defined function())
-/// this pointer should be set NULL
-/// in line after freefunction
-uint8_t FreeDeviceNodeCircle(deviceNode * p1);
-
 
 
 #endif

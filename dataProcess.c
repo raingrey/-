@@ -42,20 +42,27 @@ char AddCharToMeterDataSecondaryLink(int ord,meterDataSecondary * p,uint8_t * t,
 /*add node to meter data save node */
 /*add node to meter data save node */
 
-/* function deal with mysql*/
-/* function deal with mysql*/
-/* function deal with mysql*/
-//get meterid from mysql
+//红黑树处理
+struct rb_root listeningNodeRoot = RB_ROOT;
+struct listeningNode * RBTSearch(struct rb_root *root, uint64_t dtuid);
+int RBTInsert(struct rb_root *root, struct listeningNode *data);
+void RBTFree(struct listeningNode *node);
+//红黑树处理
+//
+//deviceNode和ModBusRegisterInfo链表处理
+//从mysql读东西
 int GetMeterID(udpMsg * p,uint8_t * dtuidstrtmp,uint8_t addrstrtmp);
-
 //generate or updata listeningNode's deviceNode link from mysql
 deviceNode * CreateDeviceNodeCircleFromMysql(uint64_t dtuid);
-
 //generate or updata deviceNode's modbusRegisterInfo link from mysql
 modbusRegisterInfo * CreateModBusRegisterInfoCircleFromMysql(deviceNode *p1);
-/* function deal with mysql*/
-/* function deal with mysql*/
-/* function deal with mysql*/
+//从mysql读东西
+
+
+uint8_t FreeModBusRegisterInfoCircle(modbusRegisterInfo * p1);
+uint8_t FreeDeviceNodeCircle(deviceNode * p1);
+//deviceNode和ModBusRegisterInfo链表处理
+
 
 /*handle data link*/
 /*handle data link*/
@@ -70,10 +77,7 @@ udpMsg * UdpMsgNodeWaitingForHandle();
 //get deviceNode in listeningNode comfort to meterid
 deviceNode * GetDeviceNodeComfortMeterid(listeningNode * p, uint32_t meterid);
 
-//handle deviceNode single circle link
 
-//handle modbusregister single circle link
-void FreeModbusRegisterInfoNodeLink(deviceNode *lp,modbusRegisterInfo * p);
 /*handle data link*/
 /*handle data link*/
 /*handle data link*/
@@ -808,10 +812,8 @@ modbusRegisterInfo * CreateModBusRegisterInfoCircleFromMysql(deviceNode * p1){
 	}
 	if(!(mysqlres=mysql_store_result(sql))){
         printf("\n%s failed to get result of mysql when handle deviceNode meterid:%d,deviceNumber:%d, error msg%s\n",ctime(&LocalTime),p1 -> meterID,p1 -> deviceNumber,mysql_error(sql));
-		if(mysqlres!=NULL){
-			mysql_free_result(mysqlres);
-			mysqlres = NULL;
-		}
+		mysql_free_result(mysqlres);
+		mysqlres = NULL;
         return NULL;
 	}
     /// get modbusRegisterInfo from mysql
@@ -822,9 +824,7 @@ modbusRegisterInfo * CreateModBusRegisterInfoCircleFromMysql(deviceNode * p1){
     /// create modbusRegisterInfo circle
     /// create modbusRegisterInfo circle
     /// create modbusRegisterInfo circle
-    i=0;
     while(mysqlrow=mysql_fetch_row(mysqlres)){
-        i++;
         mp2 = (modbusRegisterInfo *)malloc(sizeof(modbusRegisterInfo));
 #ifdef DEBUG_outofmemory
 	printf("++ModBusRegisterInfo堆缓存计数%d\n",++memory_node_counter_MBRI);
@@ -840,12 +840,10 @@ modbusRegisterInfo * CreateModBusRegisterInfoCircleFromMysql(deviceNode * p1){
             p1 -> startRegister=mp2 -> addr;
             //one result for per modbusbytenumber per device
         }
-        if(!mp1){
-            mp1 = mp2;
-            mp1 -> next = mp1;
-        }else{
-            mp2 -> next = mp1 -> next;
+        if(mp1){
             mp1 -> next = mp2;
+        }else{
+            mp1 = mp2;
         }
     }
     /// create modbusRegisterInfo circle
@@ -859,16 +857,13 @@ modbusRegisterInfo * CreateModBusRegisterInfoCircleFromMysql(deviceNode * p1){
         mysql_free_result(mysqlres);
         mysqlres = NULL;
     }
-    if(i!=0){
-        return mp1;
-    }else{
+    if(!mp1){
         printf("\n %s Alarm:mysql have no device node Regisger info about meterID %d\n",ctime(&LocalTime),p1 -> meterID);
-        return NULL;
-	}
+    }
     /// send circle back or alarm
     /// send circle back or alarm
     /// send circle back or alarm
-
+    return mp1;
 }
 
 deviceNode * CreateDeviceNodeCircleFromMysql(uint64_t dtuid){
@@ -909,9 +904,7 @@ deviceNode * CreateDeviceNodeCircleFromMysql(uint64_t dtuid){
     /// create device node circle
     /// create device node circle
     /// create device node circle
-    i=0;
     while(mysqlrow=mysql_fetch_row(mysqlres)){
-        i++;
         //deviceNode: apply memory and init to circle
         p2 = (deviceNode *)malloc(sizeof(deviceNode));
 #ifdef DEBUG_outofmemory
@@ -929,13 +922,14 @@ deviceNode * CreateDeviceNodeCircleFromMysql(uint64_t dtuid){
 
         if(!p1){
             p1 = p2;
-            p1 -> next = p1;
+	    p2=NULL;
         }else{
-            p2 -> next = p1 -> next;
             p1 -> next = p2;
+            p1 = p2;
+	    p2=NULL;
         }
 
-	}
+    }
     /// create device node circle
     /// create device node circle
     /// create device node circle
@@ -943,19 +937,15 @@ deviceNode * CreateDeviceNodeCircleFromMysql(uint64_t dtuid){
     /// send circle back or alarm
     /// send circle back or alarm
     /// send circle back or alarm
-    if(mysqlres!=NULL){
-        mysql_free_result(mysqlres);
-        mysqlres = NULL;
-    }
-    if(i != 0){
-        return p1;
-    }else{
+    mysql_free_result(mysqlres);
+    mysqlres = NULL;
+    if(!p1){
         printf("\n %s Alarm:mysql have no device node about DTUID %ld",ctime(&LocalTime),dtuid);
-        return NULL;
     }
     /// send circle back or alarm
     /// send circle back or alarm
     /// send circle back or alarm
+    return p1;
 }
 
 
@@ -1132,6 +1122,87 @@ char HostNodeUdpSend(listeningNode * tree){
 	return 1;
 }
 
+///urgent: this is important
+/// for every time every code line
+/// if a pointer is freed(by free() or by defined function())
+/// this pointer should be set NULL
+/// in line after freefunction
+void RBTFree(struct listeningNode *node)
+{
+    deviceNode * p1 = NULL;
+    modbusRegisterInfo * p2 = NULL;
+    if (node != NULL) {
+        //free deviceNode and it's modbusRegisterInfo circle
+        FreeDeviceNodeCircle(node -> headDevice);
+        node -> headDevice = NULL;
+        free(node);
+#ifdef DEBUG_outofmemory
+	printf("--listeningNode堆缓存计数%d\n",--memory_node_counter_LNode);
+#endif
+        node = NULL;
+    }
+}
+
+
+///urgent: this is important
+/// for every time every code line
+/// if a pointer is freed(by free() or by defined function())
+/// this pointer should be set NULL
+/// in line after freefunction
+uint8_t FreeDeviceNodeCircle(deviceNode * p1){
+    deviceNode * p2=NULL;
+    while((p1)){
+        //free deviceNode -> modbusRegisterInfo circle
+        FreeModBusRegisterInfoCircle((p1 -> modbusRegisterInfoHead));
+        p1 -> modbusRegisterInfoHead = NULL;
+        //free deviceNode circle
+        p2 = p1-> next -> next;
+        if(p2 == p1){
+            free(p2);
+#ifdef DEBUG_outofmemory
+		printf("--deviceNode堆缓存计数%d\n",--memory_node_counter_DN);
+#endif
+
+            p1 = NULL;
+            p2 = NULL;
+        }else{
+            free(p1 -> next);
+#ifdef DEBUG_outofmemory
+		printf("--deviceNode堆缓存计数%d\n",--memory_node_counter_DN);
+#endif
+
+            p1 -> next = p2;
+        }
+    }
+
+}
+
+uint8_t FreeModBusRegisterInfoCircle(modbusRegisterInfo * p1){
+
+    modbusRegisterInfo * p2 = NULL;
+    //free deviceNode -> modbusRegisterInfo circle
+    while((p1)){
+        p2 = p1 -> next -> next;
+        if(p1 == p2){
+            free(p2);
+#ifdef DEBUG_outofmemory
+		printf("--ModBusRegisterInfo堆缓存计数%d\n",--memory_node_counter_MBRI);
+#endif
+
+            p2 = NULL;
+            p1 = NULL;
+        }else{
+            free(p1 -> next);
+#ifdef DEBUG_outofmemory
+		printf("--ModBusRegisterInfo堆缓存计数%d\n",--memory_node_counter_MBRI);
+#endif
+
+            p1 -> next = p2;
+        }
+    }
+    return 1;
+}
+
 char RBTListeningNodeCheck(){
 	int i=0;
 	struct rb_node * node= rb_first(&listeningNodeRoot);
@@ -1160,4 +1231,46 @@ char RBTListeningNodeCheck(){
     }
 	return 1;
 }
+
+struct listeningNode * RBTSearch(struct rb_root *root, uint64_t dtuid)
+{
+    struct rb_node *node = root->rb_node;
+
+    while (node) {
+        struct listeningNode *data = container_of(node, struct listeningNode, node);
+
+        if (dtuid < data->DTUID)
+            node = node->rb_left;
+        else if (dtuid > data->DTUID)
+            node = node->rb_right;
+        else
+            return data;
+    }
+    return NULL;
+}
+
+int RBTInsert(struct rb_root *root, struct listeningNode *data)
+{
+    struct rb_node **new = &(root->rb_node), *parent = NULL;
+
+    /* Figure out where to put new node */
+    while (*new) {
+        struct listeningNode *this = container_of(*new, struct listeningNode, node);
+
+        parent = *new;
+        if (this -> DTUID > data->DTUID)
+            new = &((*new)->rb_left);
+        else if (this -> DTUID < data->DTUID)
+            new = &((*new)->rb_right);
+        else
+            return 0;
+    }
+
+    /* Add new node and rebalance tree. */
+    rb_link_node(&data->node, parent, new);
+    rb_insert_color(&data->node, root);
+
+    return 1;
+}
+
 
