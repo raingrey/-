@@ -739,19 +739,14 @@ char SplitModBusData(mBDS *mbds,uint8_t *mbst,char n){
 
 deviceNode * GetDeviceNodeComfortMeterid(listeningNode *p,uint32_t meterid){
 	deviceNode * dnp = p -> headDevice;
-    if(!dnp)    return dnp;
-    do{
-        dnp = dnp -> next;
+	if(!dnp)    return dnp;
+	while((dnp)){
 		if(dnp -> meterID == meterid){
 			break;
 		}
-	}while((dnp != p -> headDevice));
-    if(dnp -> meterID == meterid){
+		dnp = dnp -> next;
+	}
         return dnp;
-    }else{
-        dnp = NULL;
-        return dnp;
-    }
 }
 
 udpMsg * UdpMsgNodeWaitingForHandle(){
@@ -906,6 +901,10 @@ deviceNode * CreateDeviceNodeCircleFromMysql(uint64_t dtuid){
     /// create device node circle
     while(mysqlrow=mysql_fetch_row(mysqlres)){
         //deviceNode: apply memory and init to circle
+        //这里不能轻率的申请一段内存，而是应该检查meterID是否重复
+        //重复的话可直接跳过，
+        //如果不重复的话可加入
+        //如果走完以后，！！存在！！没加入的内存，还要释放内存
         p2 = (deviceNode *)malloc(sizeof(deviceNode));
 #ifdef DEBUG_outofmemory
 	printf("++deviceNode堆缓存计数%d\n",++memory_node_counter_DN);
@@ -1156,23 +1155,13 @@ uint8_t FreeDeviceNodeCircle(deviceNode * p1){
         FreeModBusRegisterInfoCircle((p1 -> modbusRegisterInfoHead));
         p1 -> modbusRegisterInfoHead = NULL;
         //free deviceNode circle
-        p2 = p1-> next -> next;
-        if(p2 == p1){
-            free(p2);
+        p2 = p1-> next;
+        free(p1);
 #ifdef DEBUG_outofmemory
-		printf("--deviceNode堆缓存计数%d\n",--memory_node_counter_DN);
+	printf("--deviceNode堆缓存计数%d\n",--memory_node_counter_DN);
 #endif
-
-            p1 = NULL;
-            p2 = NULL;
-        }else{
-            free(p1 -> next);
-#ifdef DEBUG_outofmemory
-		printf("--deviceNode堆缓存计数%d\n",--memory_node_counter_DN);
-#endif
-
-            p1 -> next = p2;
-        }
+	p1=p2
+        p2 = NULL;
     }
 
 }
@@ -1182,23 +1171,14 @@ uint8_t FreeModBusRegisterInfoCircle(modbusRegisterInfo * p1){
     modbusRegisterInfo * p2 = NULL;
     //free deviceNode -> modbusRegisterInfo circle
     while((p1)){
-        p2 = p1 -> next -> next;
-        if(p1 == p2){
-            free(p2);
+        p2 = p1 -> next;
+        free(p1);
 #ifdef DEBUG_outofmemory
-		printf("--ModBusRegisterInfo堆缓存计数%d\n",--memory_node_counter_MBRI);
+	printf("--ModBusRegisterInfo堆缓存计数%d\n",--memory_node_counter_MBRI);
 #endif
 
-            p2 = NULL;
-            p1 = NULL;
-        }else{
-            free(p1 -> next);
-#ifdef DEBUG_outofmemory
-		printf("--ModBusRegisterInfo堆缓存计数%d\n",--memory_node_counter_MBRI);
-#endif
-
-            p1 -> next = p2;
-        }
+        p1 = p2;
+        p2 = NULL;
     }
     return 1;
 }
