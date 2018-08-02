@@ -1,6 +1,22 @@
 #ifndef _MODBUSDRIVER_H_
 #define _MODBUSDRIVER_H_
 
+//测试内存溢出的问题
+#define DEBUG_outofmemory
+#define DEBUG
+extern int memory_node_counter_udpmsg;
+extern int memory_node_counter_datasave;
+//listeningNode
+extern int memory_node_counter_LNode;
+//ModBusRegisterInfo
+extern int memory_node_counter_MBRI;
+//deviceNode
+extern int memory_node_counter_DN;
+//测试内存溢出的问题
+
+
+
+
 #define LNCHECKANDSENDHOSTTIMESTEP 10//second
 
 #define BUFF_SIZE 100

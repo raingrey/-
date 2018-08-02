@@ -27,7 +27,9 @@ void * ThreadDataSave(void * arg){
 	meterDataPrimary * p=NULL;
 	meterDataSecondary * p1=NULL;
 	uint8_t querystrtmp[MYSQLQUERYSTRSIZE] = {0};
+#ifdef DEBUG
 	printf("数据保存线程已经就绪——时间—%s",get_str_time_now());
+#endif
 	uint32_t counter=0;
 	uint32_t sleep_counter=0;
 	uint32_t effective_counter=0;
@@ -37,9 +39,13 @@ void * ThreadDataSave(void * arg){
 		pthread_mutex_lock(&data_save_mtx);
 //if there has no meter data to save hung up thread
 		while((meterDataPrimaryHead == NULL)&&(meterDataSecondaryHead == NULL)){
+#ifdef DEBUG
 			printf("数据保存线程第————%d————次睡眠,时间-%s",++sleep_counter,get_str_time_now());
+#endif
 			pthread_cond_wait(&condDataSave,&data_save_mtx);
+#ifdef DEBUG
 			printf("数据保存线程第————%d————次唤醒,时间-%s",++counter,get_str_time_now());
+#endif
 		}
 //1.1 cut node from one-way link-list meterdataprimary 
 		if(meterDataPrimaryHead){
@@ -75,6 +81,9 @@ void * ThreadDataSave(void * arg){
 printf("meterDataPrimary has been saved\n");
 //1.4 free meterdataprimary node
 				free(p);
+#ifdef DEBUG_outofmemory
+		printf("--dataSave缓存个数：%d\n",--memory_node_counter_datasave);
+#endif
 				p = NULL;
 			}
 		}
@@ -105,6 +114,10 @@ printf("meterDataPrimary has been saved\n");
 			}else{
 				printf("meterDataSecondary has been saved\n");
 				free(p1);
+
+#ifdef DEBUG_outofmemory
+		printf("--dataSave缓存个数：%d\n",--memory_node_counter_datasave);
+#endif
 				p1= NULL;
 			}
 		}
@@ -121,6 +134,9 @@ char SendBackMeterDataPrimaryNode(meterDataPrimary * p){
     }else{
 		printf("meterID-%d,常规数据无法存入次数超过上限\n",p->meterID);
 		free(p);
+#ifdef DEBUG_outofmemory
+		printf("--dataSave缓存个数：%d\n",--memory_node_counter_datasave);
+#endif
     }
     return 1;
 	//insert p back to two-way link-list's head
@@ -134,6 +150,10 @@ char SendBackMeterDataSecondaryNode(meterDataSecondary* p){
     }else{
 		printf("meterID-%d,用户自定义数据无法存入次数超过上限\n",p->meterID);
 		free(p);
+
+#ifdef DEBUG_outofmemory
+		printf("--dataSave缓存个数：%d\n",--memory_node_counter_datasave);
+#endif
 	    return 1;
     }
 	//insert p back to two-way link-list's head

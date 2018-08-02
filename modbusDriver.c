@@ -17,6 +17,15 @@
 
 
 
+//测试内存溢出的问题,动态申请的堆内存计数
+int memory_node_counter_udpmsg=0;
+int memory_node_counter_datasave=0;
+int memory_node_counter_LNode=0;
+//ModBusRegisterInfo
+int memory_node_counter_MBRI=0;
+//deviceNode
+int memory_node_counter_DN=0;
+//测试内存溢出的问题
 
 
 /* CRC Check for ModBus
@@ -157,7 +166,7 @@ void InsertToUdpMsgLink(udpMsg * p);
 void * ThreadLNManager();
 //check and maintain RBT
 //and also triger HostNodeUdpSend
-char RBTListeningNodeCheck();
+//char RBTListeningNodeCheck();
 //maintain two way link list
 char CheckLinkList();
 //when dtu is used as host in modbus line,we should send host data
@@ -228,35 +237,10 @@ void RBTFree(struct listeningNode *node)
         //free deviceNode and it's modbusRegisterInfo circle
         FreeDeviceNodeCircle(node -> headDevice);
         node -> headDevice = NULL;
-        /*while((node -> headDevice)){
-            //free deviceNode -> modbusRegisterInfo circle
-
-            FreeModBusRegisterInfoCircle((node -> headDevice -> modbusRegisterInfoHead));
-
-            while((node -> headDevice -> modbusRegisterInfoHead));
-            {
-                p2 = node -> headDevice-> modbusRegisterInfoHead -> next -> next;
-                if(node -> headDevice -> modbusRegisterInfoHead == p2){
-                    free(p2);
-                    p2 = NULL;
-                    node -> headDevice -> modbusRegisterInfoHead = NULL;
-                }else{
-                    free(node -> headDevice -> modbusRegisterInfoHead -> next);
-                    node -> headDevice -> modbusRegisterInfoHead -> next = p2;
-                }
-            }
-            //free deviceNode circle
-            p1 = node -> headDevice-> next -> next;
-            if(node -> headDevice == p1){
-                free(p1);
-                p1 = NULL;
-                node -> headDevice = NULL;
-            }else{
-                free(node -> headDevice -> next);
-                node -> headDevice -> next = p1;
-            }
-        }*/
         free(node);
+#ifdef DEBUG_outofmemory
+	printf("--listeningNode堆缓存计数%d\n",--memory_node_counter_LNode);
+#endif
         node = NULL;
     }
 }
@@ -276,10 +260,18 @@ uint8_t FreeDeviceNodeCircle(deviceNode * p1){
         p2 = p1-> next -> next;
         if(p2 == p1){
             free(p2);
+#ifdef DEBUG_outofmemory
+		printf("--deviceNode堆缓存计数%d\n",--memory_node_counter_DN);
+#endif
+
             p1 = NULL;
             p2 = NULL;
         }else{
             free(p1 -> next);
+#ifdef DEBUG_outofmemory
+		printf("--deviceNode堆缓存计数%d\n",--memory_node_counter_DN);
+#endif
+
             p1 -> next = p2;
         }
     }
@@ -294,10 +286,18 @@ uint8_t FreeModBusRegisterInfoCircle(modbusRegisterInfo * p1){
         p2 = p1 -> next -> next;
         if(p1 == p2){
             free(p2);
+#ifdef DEBUG_outofmemory
+		printf("--ModBusRegisterInfo堆缓存计数%d\n",--memory_node_counter_MBRI);
+#endif
+
             p2 = NULL;
             p1 = NULL;
         }else{
             free(p1 -> next);
+#ifdef DEBUG_outofmemory
+		printf("--ModBusRegisterInfo堆缓存计数%d\n",--memory_node_counter_MBRI);
+#endif
+
             p1 -> next = p2;
         }
     }
@@ -417,23 +417,17 @@ int main(int argc,char *argv[])
 		printf("bind() error");
 	}
 
-
-    /*******************************************************************
-	//initialize listeningNode tree;
-    if((listeningNodeRoot -> root =(listeningNode *)malloc(sizeof(listeningNode)))==NULL){
-        printf("\nlisteningNode -> root Node out of memory");
-        return 0;
-    }
-    memset(listeningNodeRoot -> root,0,(sizeof(listeningNode)));
-    listeningNodeRoot -> root -> color = BLACK;
-    listeningNodeRoot -> root -> dumpTime= time(NULL);
-    ********************************************************/
 	//initialize udpMsg two-way link-list
 	//check and malloc memory for head node
 	if((udpMsgHead=(udpMsg *)malloc(sizeof(udpMsg)))==NULL){
 		printf("udpMsg's Head Node out of memory");
 		return 0;
 	}
+	//测试内存溢出的问题
+#ifdef DEBUG_outofmemory
+	printf("++udpmsg缓存个数：%d\n",++memory_node_counter_udpmsg);
+#endif
+	//测试内存溢出的问题
 	memset(udpMsgHead,0,(sizeof(udpMsg)));
 	//link the head node to a circle
 	udpMsgHead -> next = udpMsgHead;
@@ -458,21 +452,37 @@ int main(int argc,char *argv[])
 	long udpmsgcounter=0;
 	uint32_t i;
 	while(1){
-		if((msg||msg=(udpMsg *)malloc(sizeof(udpMsg))){
-			printf("udp listeningNode out of memory");
-			continue;
+		//测试内存溢出的问题
+#ifdef DEBUG_outofmemory
+		if(msg){
+			memory_node_counter_udpmsg--;
 		}
+#endif
+		//测试内存溢出的问题
+		if((!msg)&&(!(msg=(udpMsg *)malloc(sizeof(udpMsg))))){
+				printf("udp listeningNode out of memory");
+				sleep(10);
+				continue;
+		}
+		//测试内存溢出的问题
+#ifdef DEBUG_outofmemory
+		printf("-+udpmsg缓存个数：%d\n",++memory_node_counter_udpmsg);
+#endif
+		//测试内存溢出的问题
+
 		memset(msg,0,(sizeof(udpMsg)));
 
 //listen and accept a request,program will blocking here
 		if(recvfrom(serv_sock,(char*)(msg->msg),BUFF_SIZE,0,
 			(struct sockaddr *)&client_addr,&client_addr_size)!=-1){
+#ifdef DEBUG
 			IPaddress=inet_ntoa(client_addr.sin_addr);
 			 udpmsgcounter++;
 			printf("Message from %s ,udpmsgcounter:%ld,message: ",IPaddress,udpmsgcounter);
 			// for(i=0;i<sizeof(messages);i++)
 			//    printf("%x,",messages[i]);
 			printf("\n\n,");
+#endif
 			msg -> clientAddr=client_addr;
 			
 			for(i=0;i<DTUIDSIZE;i++)
@@ -522,9 +532,13 @@ void * ThreadLNManager(){
 	//1.1 handle udpmsg two way link
 	//
 		
+#ifdef DEBUG
 		printf("ThreadLNManager将要-----------获取------------锁data_save_mtx\n");
+#endif
 		pthread_mutex_lock(&data_save_mtx);
+#ifdef DEBUG
 		printf("ThreadLNManager-----------获取锁成功------------data_save_mtx\n");
+#endif
 		meterDataPrimary * p1 = meterDataPrimaryHead;
 		meterDataSecondary * p2 = meterDataSecondaryHead;
 	//1.2 handle meterdataprimary and meterdatasecondary two way link
@@ -544,7 +558,9 @@ void * ThreadLNManager(){
 			else
 				break;
 		}
+#ifdef DEBUG
 		printf("ThreadLNManager将要-----------释放-----------锁data_save_mtx\n");
+#endif
 		pthread_mutex_unlock(&data_save_mtx);
 		if(MeterDataNumber>0){
 			pthread_cond_signal(&condDataSave);
@@ -580,36 +596,6 @@ uint32_t  ModBusCRC16(unsigned char *updata,unsigned int len)
         return (uchCRCHi<<8|uchCRCLo);
 }
 
-
-/**********************************************
- * RBTListeningNodeCheck
- * early version handle MBStatus
-		switch(tree -> MBStatus){
-		case ListeningNodeError:
-
-///alarm6:save message to mysql and free the node
-		break;
-		case ListeningNodeListening:
-		RBTListeningNodeNumber++;
-		break;
-		case ListeningNodeHeartBeat:
-		break;
-		case ListeningNodeProcessing:
-		break;
-		case ListeningNodeLastDataIsHost:
-			tree -> MBStatus = ListeningNodeListening;
-		break;
-		case ListeningNodeHostClientConfuse:
-		break;
-		case ListeningNodeUnknownFunctionCode:
-		break;
-		case ListeningNodeHost:
-		break;
-		default:
-		break;
-		}
-*********************************************/
-
 /*
  * RedBlack Tree test code
  * @raingrey
@@ -643,161 +629,3 @@ uint32_t  ModBusCRC16(unsigned char *updata,unsigned int len)
 	}
 */
 
-/*********************************************************
- * early version has thread adjust
- * if need more dataProcess/dataSave,create more
-*********************************************************
-
-
-//thread information table
-threadPoolInfo ThreadPool[MAXDATAPROCESSSAVETHREADNUMBER]={0};
-
-//sign of data process thread is needed
-char NeedDataProcessThread=NEEDNOTHREAD;
-//sign of data save thread is needed
-char NeedDataSaveThread=NEEDNOTHREAD;
-
-//current thread number
-char TotalThreadNumber=0;
-
-
-//balace thread distribution
-char ThreadAdjust();
-//manage thread every xx second
-void ThreadMangerControlledByTimer();
-
-//code init time signal
-//code init time signal
-//code init time signal
-    struct itimerval tick;
-    memset(&tick,0,sizeof(tick));
-    signal(SIGALRM,ThreadMangerControlledByTimer);
-    //timeout to run first time
-    tick.it_value.tv_sec=1;
-    tick.it_value.tv_usec=0;
-    //after first,the interval time for clock
-    tick.it_interval.tv_sec=LNCHECKANDSENDHOSTTIMESTEP;
-    tick.it_interval.tv_usec=0;
-    if(setitimer(ITIMER_REAL,&tick,NULL)<0)
-        printf("set timer failed!\n");
-//code init time signal
-//code init time signal
-//code init time signal
-
-char ThreadAdjust(){
-    char i=0;
-
-    if(TotalThreadNumber >= MAXTHREADNUMBER){
-        //need urgent alarm
-        printf("thread pool fill");
-        for(i=0;i<MAXTHREADNUMBER;i++){
-            if((NeedDataSaveThread == NEEDDATASAVETHREAD)){
-                if((ThreadPool[i].threadascription == THREADASCRIPTIONDATAPROCESS)&&(ThreadPool[i].threadstatus != THREADSTATUSRUNNING)){
-                    ThreadPool[i].cmd = THREADFREE;
-                    pthread_cond_broadcast(&condDataProcess);
-                    return FREEDATAPROCESSTHREAD;
-                }
-            }
-            if((NeedDataProcessThread == NEEDDATAPROCESSTHREAD)){
-                if((ThreadPool[i].threadascription == THREADASCRIPTIONDATASAVE)&&(ThreadPool[i].threadstatus != THREADSTATUSRUNNING)){
-                    ThreadPool[i].cmd = THREADFREE;
-                    pthread_cond_broadcast(&condDataSave);
-                    return FREEDATASAVETHREAD;
-                }
-            }
-        }
-        if(i == MAXTHREADNUMBER) return THREADPOOLFILL;
-    }
-    if(NeedDataSaveThread == NEEDDATASAVETHREAD){
-        pthread_create(&(ThreadPool[TotalThreadNumber-1].tid),NULL,ThreadDataSave,NULL);
-        ThreadPool[TotalThreadNumber-1].threadascription = THREADASCRIPTIONDATASAVE;
-        ThreadPool[TotalThreadNumber-1].threadstatus = THREADSTATUSNULL;
-        ThreadPool[TotalThreadNumber-1].cmd = THREADPERSIST;
-        TotalThreadNumber++;
-        if(TotalThreadNumber >= MAXTHREADNUMBER){
-            //need urgent alarm
-            printf("thread pool fill");
-            return THREADPOOLFILL;
-        }
-        NeedDataSaveThread == NEEDNOTHREAD;
-    }
-
-    if(NeedDataProcessThread == NEEDDATAPROCESSTHREAD){
-        pthread_create(&(ThreadPool[TotalThreadNumber-1].tid),NULL,ThreadDataProcess,NULL);
-        ThreadPool[TotalThreadNumber-1].threadascription = THREADASCRIPTIONDATAPROCESS;
-        ThreadPool[TotalThreadNumber-1].threadstatus = THREADSTATUSNULL;
-        ThreadPool[TotalThreadNumber-1].cmd = THREADPERSIST;
-        TotalThreadNumber++;
-        if(TotalThreadNumber >= MAXTHREADNUMBER){
-            //need urgent alarm
-            printf("thread pool fill");
-            return THREADPOOLFILL;
-        }
-        NeedDataProcessThread == NEEDNOTHREAD;
-    }
-}
-
-void ThreadMangerControlledByTimer(){
-    if((RBTListeningNodeNumber>MEDIUMNUMBERRBTLISTENINGNODE)&&(RBTListeningNodeNumber<MAXNUMBERRBTLISTENINGNODE)){
-///Alarm4:so many listeningNode,server almost dump
-    printf("MEDIUMNUMBERRBTLISTENINGNODE listeningNode waiting for handle ");
-//may be we can create more thread to handle udpMsg
-    if(NeedDataSaveThread != NEEDDATASAVETHREAD)
-        NeedDataProcessThread=NEEDDATAPROCESSTHREAD;
-    }
-    if((RBTListeningNodeNumber>MAXNUMBERRBTLISTENINGNODE)){
-///UrgentAlarm1:too much udpMsgNode,server will dump
-        printf("MAXNUMBERRBTLISTENINGNODE listeningNode waiting for handle ");
-//may be we can create more thread to handle udpMsg
-//but we should recycle some thread
-//uncontrolled add thread will cause trouble
-        NeedDataProcessThread=NEEDDATAPROCESSTHREAD;
-    }
-    if((UdpMsgNumber >MEDIUMNUMBERUDPMSGNODE)&&(UdpMsgNumber<MAXNUMBERUDPMSGNODE)){
-///Alarm4:too much udpMsgNode,server almost dump
-        printf("MEDIUMNUMBERUDPNODE udpMsg Node waiting for handle ");
-//may be we can create more thread to handle udpMsg
-        if(NeedDataSaveThread != NEEDDATASAVETHREAD)
-            NeedDataProcessThread=NEEDDATAPROCESSTHREAD;
-    }
-    if((UdpMsgNumber>MAXNUMBERUDPMSGNODE)){
-///UrgentAlarm1:too much udpMsgNode,server will dump
-        printf("MAXNUMBERUDPNODE udpMsg Node waiting for handle ");
-//may be we can create more thread to handle udpMsg
-//but we should recycle some thread
-//uncontrolled add thread will cause trouble
-        NeedDataProcessThread=NEEDDATAPROCESSTHREAD;
-    }
-    if((MeterDataNumber>MEDIUMNUMBERMETERDATAPRIMARYNODE)&&(MeterDataNumber<MAXNUMBERMETERDATAPRIMARYNODE)){
-///Alarm4:too much meterDataPrimaryNode,server almost dump
-        printf("MEDIUMNUMBERMETERDATAPRIMARYNODE meterdataprimary Node waiting for handle ");
-//may be we can create more thread to handle
-        if(NeedDataProcessThread != NEEDDATAPROCESSTHREAD)
-            NeedDataSaveThread=NEEDDATASAVETHREAD;
-    }
-    if((MeterDataNumber>MAXNUMBERMETERDATAPRIMARYNODE)){
-///UrgentAlarm2:too much udpMsgNode,server will dump
-        printf("MAXNUMBERUDPNODE udpMsg Node waiting for handle ");
-//may be we can create more thread to handle udpMsg
-//but we should recycle some thread
-//uncontrolled add thread will cause trouble
-        NeedDataSaveThread=NEEDDATASAVETHREAD;
-    }
-}
-
-
-*********************************************************
- * early version has thread adjust
- * if need more dataProcess/dataSave,create more
-*********************************************************/
-
-/*
- * udp message test
- * @author raingrey
- * @2017/07/18
-    udpMsg * msg = (udpMsg *) arg;
-    char * IPaddress=inet_ntoa(msg -> clientAddr.sin_addr);
-    printf("Message from %s : %s \n",IPaddress,msg->msg);
-//sent messages back to client
-    sendto(msg->socket,msg->msg,strlen(msg->msg),0,(struct sockaddr*)&(msg->clientAddr),sizeof(msg->clientAddr));
- * */
