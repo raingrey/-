@@ -51,7 +51,7 @@ void RBTFree(struct listeningNode *node);
 //
 //deviceNode和ModBusRegisterInfo链表处理
 //从mysql读东西
-int GetMeterID(udpMsg * p,uint64_t dtuid,uint8_t addrstrtmp);
+int GetMeterID(uint64_t dtuid,uint8_t addrstrtmp);
 //generate or updata listeningNode's deviceNode link from mysql
 int  CreateDeviceNodeCircleFromMysql(struct listeningNode *p);
 //generate or updata deviceNode's modbusRegisterInfo link from mysql
@@ -248,7 +248,7 @@ void * ThreadDataProcess(void * arg){
 		memset(&mbds,0,sizeof(mbds));
 		SplitModBusData(&mbds,&modbusstrtmp[0],imodbus);
 		//remove situation CRC16 check failed
-		if(mbds.CRC!=ModBusCRC16(modbusstrtmp,imodbus-MODBUSCRCDATASIZE)){
+		if(!((mbds.fC == MODBUSFUNCCODE) && (mbds.CRC == ModBusCRC16(modbusstrtmp,imodbus-MODBUSCRCDATASIZE)))){
 			goto data_process_reset_connect;
 		}
 //2.2 udp data and listeningNode is ready,now we will handle it
@@ -259,7 +259,7 @@ void * ThreadDataProcess(void * arg){
 #endif
 
 //2.3 from now udpMsg is confirmed have device address,so i can identify it's meterID\startRegister*/
-		meterid=GetMeterID(p,dtuid,mbds.addr);
+		meterid=GetMeterID(dtuid,mbds.addr);
 		//check if meter id is correct
 		if(meterid == 0){
 			goto data_process_reset_connect;
@@ -338,7 +338,7 @@ void * ThreadDataProcess(void * arg){
 //@2017/0803/23:16
 //@raingrey
 		i=0;
-		//仪表应答数据是有可能不如与登记数据长度不符的，因此遍历modbusRegisterInfoHead从头算一下
+		//仪表应答数据是有可能与登记数据长度不符的，因此遍历modbusRegisterInfoHead从头算一下
 		for(pmbri = dnp -> modbusRegisterInfoHead;pmbri;pmbri = pmbri -> next){
 			i += pmbri -> bytenum;
 			if(i == mbds.bN)
@@ -357,9 +357,9 @@ void * ThreadDataProcess(void * arg){
 		else {
 			meterdataprimary= (meterDataPrimary*)malloc(sizeof(meterDataPrimary));
 				//测试内存溢出的问题
-	#ifdef DEBUG_outofmemory
+#ifdef DEBUG_outofmemory
 				printf("++datasave堆缓存计数%d--申请了常规有效数据\n",++memory_node_counter_datasave);
-	#endif
+#endif
 				//测试内存溢出的问题
 		
 		}
@@ -557,8 +557,10 @@ void * ThreadDataProcess(void * arg){
 		pthread_cond_signal(&condDataSave);
 	}
         pthread_mutex_unlock(&data_save_mtx);
+	goto data_process_no_heartbeat;
 data_process_reset_connect:
 		p1 -> heartBeat++;
+data_process_no_heartbeat:
             	p1 -> dumpTime=time(NULL);
 data_process_continue:
 #ifdef DEBUG_outofmemory
@@ -636,7 +638,7 @@ udpMsg * UdpMsgNodeWaitingForHandle(){
     return NULL;
 }
 
-int GetMeterID(udpMsg * p,uint64_t dtuid,uint8_t addrstrtmp){
+int GetMeterID(uint64_t dtuid,uint8_t addrstrtmp){
 	uint8_t querystrtmp[MYSQLQUERYSTRSIZE] = {0};
 	int meterid=0;
 //        printf("\n%d\n",dtuid);
@@ -645,11 +647,11 @@ int GetMeterID(udpMsg * p,uint64_t dtuid,uint8_t addrstrtmp){
 	MYSQL_ROW mysqlrow;
 	if(mysql_real_query(sql,querystrtmp,strlen(querystrtmp))){
 		printf("\n%s\n",querystrtmp);
-		printf("\nfailed to query mysql when handle %s,mysql,dtuid:%ld,addrstrtmp:%d, error msg%s\n",p -> msg,dtuid,addrstrtmp,mysql_error(sql));
+		printf("\nfailed to query mysql when handle udpmsg,mysql,dtuid:%ld,addrstrtmp:%d, error msg%s\n",dtuid,addrstrtmp,mysql_error(sql));
 		return MYSQLFAILED;
 	}
 	if(!(mysqlres=mysql_store_result(sql))){
-        printf("\nfailed to get result of  mysql when handle %s,mysql,dtuid:%ld,addrstrtmp:%d, error msg%s\n",p -> msg,dtuid,addrstrtmp,mysql_error(sql));
+        printf("\nfailed to get result of  mysql when handle udpmsg,mysql,dtuid:%ld,addrstrtmp:%d, error msg%s\n",dtuid,addrstrtmp,mysql_error(sql));
 		return MYSQLFAILED;
 	}
     if(mysqlrow=mysql_fetch_row(mysqlres))
@@ -669,7 +671,7 @@ int CreateModBusRegisterInfoCircleFromMysql(deviceNode * p){
     /// get  of this device from mysql
     MYSQL_RES * mysqlres=NULL;
     MYSQL_ROW mysqlrow;
-    int i=0;
+    int i=0,j=0;
     modbusRegisterInfo * mp1=NULL;
     modbusRegisterInfo * mp2=NULL;
     modbusRegisterInfo * lastmp1=NULL;
@@ -693,8 +695,10 @@ int CreateModBusRegisterInfoCircleFromMysql(deviceNode * p){
     while(mysqlrow=mysql_fetch_row(mysqlres)){
 	//首先，MBRI链中已有数据要剔除,然后，还要更新此阶位下已有数据
 	i=atoi(mysqlrow[0]);
-	for(mp1 = p -> modbusRegisterInfoHead;mp1;lastmp1=mp1,mp1 = mp1 -> next)
-		if(i == mp1 -> ord){
+	for(mp1 = p -> modbusRegisterInfoHead;mp1;mp1 = mp1 -> next)
+		if(i < mp1 -> order)
+			lastmp1=mp1;
+		else if(i == mp1 -> ord){
 			mp1 -> addr= atoi(mysqlrow[1]);
 			mp1 -> bytenum= atoi(mysqlrow[2]);
 			mp1 -> datatype= atoi(mysqlrow[3]);
@@ -703,7 +707,7 @@ int CreateModBusRegisterInfoCircleFromMysql(deviceNode * p){
 	if(mp1) continue;
         mp2 = (modbusRegisterInfo *)malloc(sizeof(modbusRegisterInfo));
 #ifdef DEBUG_outofmemory
-	if(memory_node_counter_MBRI%100 == 0)
+//	if(memory_node_counter_MBRI%100 == 0)
 		printf("++ModBusRegisterInfo堆缓存计数%d--创建MBRI，meterID=%d,ord=%d,addr=%d,bytenum=%d,datatype=%d\n",++memory_node_counter_MBRI,p->meterID,atoi(mysqlrow[0]),atoi(mysqlrow[1]),atoi(mysqlrow[2]),atoi(mysqlrow[3]));
 #endif
         memset(mp2,0,sizeof(modbusRegisterInfo));
@@ -721,6 +725,8 @@ int CreateModBusRegisterInfoCircleFromMysql(deviceNode * p){
 	if(! p -> modbusRegisterInfoHead){
 		p -> modbusRegisterInfoHead = mp2;
 	}else{
+		if(lastmp1 -> next)
+			mp2 -> next = lastmp1 -> next;
 		lastmp1 -> next = mp2;
 	}
 	mp2 = NULL;
@@ -774,6 +780,9 @@ int CreateDeviceNodeCircleFromMysql(listeningNode * p){
 #endif
 		if(i == p1 -> meterID){
         		p1 -> deviceNumber = atoi(mysqlrow[0]);
+			if(CreateModBusRegisterInfoCircleFromMysql(p1)){
+				printf("\n%s Alarm: No ModBusRegisterInfo founded when create modbusRegisterInfo circle for deviceNode %d",ctime(&LocalTime),p1 -> meterID);
+			}
 #ifdef DEBUG
 			printf("跳过了重复的meterID\n");
 #endif
