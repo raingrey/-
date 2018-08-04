@@ -3,7 +3,7 @@
 
 //测试内存溢出的问题
 #define DEBUG_outofmemory
-#define DEBUG
+//#define DEBUG
 extern int memory_node_counter_udpmsg;
 extern int memory_node_counter_datasave;
 //listeningNode
@@ -16,49 +16,22 @@ extern int memory_node_counter_DN;
 
 
 
-
-#define LNCHECKANDSENDHOSTTIMESTEP 10//second
-
 #define BUFF_SIZE 100
 
 #define MODBUSDATAUNITSIZEMAX 480
 
-#define MAXDUMPTIME 3//seconds
-#define MAXDUMPTIMEHOSTNODE 360//seconds
-#define MAXHEARTBEATNUMBER 500//
+//宕机30分钟删除链接
+#define MAXDUMPTIME 1800//seconds
+//超出此次数再次处理包
 #define MMAXHEARTBEATNUMBER 600//
-#define HOSTHEARTBEATNUMBER 1
-
-#define NEEDNOTHREAD 0
-#define NEEDDATAPROCESSTHREAD 1
-#define NEEDDATASAVETHREAD 2
-
-/*Urgent Alarm*/
-#define SERVERDUMPHOSTNODE 96
-#define SERVERDUMPLISTENINGNODE 97
-#define SERVERDUMPMETERDATAPRIMARYNODE 98
-#define SERVERDUMPMETERDATASECONDARYNODE 99
-#define SERVERDUMPUDPMSGNODE 100
-
-
-#define MAXDATAPROCESSSAVETHREADNUMBER 14
-
-#define MEDIUMNUMBERUDPMSGNODE 100
-#define MAXNUMBERUDPMSGNODE 120
-
-#define MEDIUMNUMBERMETERDATAPRIMARYNODE 100
-#define MAXNUMBERMETERDATAPRIMARYNODE 120
-
-#define MEDIUMNUMBERMETERDATASECONDARYNODE 100
-#define MAXNUMBERMETERDATASECONDARYNODE 120
-
-#define MEDIUMNUMBERRBTLISTENINGNODE 100
-#define MAXNUMBERRBTLISTENINGNODE 120
-
+//超出此次数忽略包
+#define MAXHEARTBEATNUMBER 500//
+//超出此次数伪装主机
+#define HOSTHEARTBEATNUMBER 20
 
 //heart beat data less than 15 byte
 #define HEARTBEATSTR "influid.com"
-///IMEI code size and also the dtuID's size
+///IMEI码，当前DTUID长15
 #define DTUIDSIZE 15
 #define MODBUSADDRSIZE 1
 #define MODBUSFUNCCODE 0x03
@@ -70,11 +43,205 @@ extern int memory_node_counter_DN;
 #define MODBUSREGISTERNUMBERDATASIZE 2
 #define MODBUSREGISTERNUMBERMAX 100
 
+//mysql的查询字符串最大长度
 #define MYSQLQUERYSTRSIZE 250
-#define MYSQLMANUFACTURESIZE 30
 #define MYSQLSTARTREGISTERORD 1
-#define MYSQLSELECTBACKINTSIZE 3
 
+
+
+
+/**
+ *  * udp data struct
+ *   * two-way linked-list
+ *    * used for Thread:
+ *     * 1.Recvform of main
+ *      * 2.and LNManager
+ *       * 3.DataProcess
+ *        * 
+ *         * status:
+ *          * 0    can not use
+ *           * 1    can be processed by ThreadProcess
+ *            * 2    processing by ThreadProcess
+ *             * socket:
+ *              * socket descripter
+ *               * clientAddr:
+ *                * from IP
+ *                 * msg:
+ *                  * message data from buffer
+ *                   *
+ *                    * */
+#define UDPNODESENDBACKTIMECRITCAL 8
+typedef struct udpMsg{
+//        char status;
+        struct sockaddr_in clientAddr;
+        uint8_t msg[BUFF_SIZE];
+        struct udpMsg * next;
+}udpMsg;
+
+/*
+ * threadascription:
+ * 0	NULL
+ * 1	data process thread
+ * 2	data save thread
+ * threadstatus:
+ * 0	no thread
+ * 1	thread hung up
+ * 2	thread running
+ */
+
+//return:
+#define FREEDATAPROCESSTHREAD 1
+#define FREEDATASAVETHREAD 2
+
+#define MAXTHREADNUMBER 16
+
+#define THREADASCRIPTIONNULL 0
+#define THREADASCRIPTIONDATAPROCESS 1
+#define THREADASCRIPTIONDATASAVE 2
+#define THREADASCRIPTIONLNMANAGER 3
+
+#define THREADSTATUSNULL 0
+#define THREADSTATUSHUNGUP 1
+#define THREADSTATUSRUNNING 2
+
+#define THREADPOOLFILL 0
+
+#define THREADFREE 0
+#define THREADPERSIST 1
+
+//dt = 0 	wrong
+//dt = 1 	client data
+//dt = 2 	host data
+//dt = 3 	client or host data
+#define MODBUSDATAWRONG 0
+#define MODBUSDATACLIENTDATA 1
+#define MODBUSDATAHOSTDATA 2
+#define MODBUSDATACLIENTORHOSTDATA 3
+typedef struct mBDS{
+	uint8_t dT;
+        uint8_t addr;
+        uint8_t fC;
+        uint8_t bN;
+	uint16_t sR;
+	uint16_t rN;
+	uint16_t CRC;
+	uint8_t mBD[BUFF_SIZE-20];
+}mBDS;
+//#define ListeningNodeHost 7
+#define ListeningNodeHeartBeat 6
+//#define ListeningNodeUnknownFunctionCode 5
+//#define ListeningNodeListening 4
+typedef struct listeningNode {
+    uint32_t MBStatus;
+    uint32_t heartBeat;
+    struct rb_node node;
+    uint64_t DTUID;
+    time_t dumpTime;
+//这里建立一个哈希表的数据，256个仪表单元0xff，
+//用0xff%0xf来确定所属哈希表，然后进行最多16次比较即可确定元素
+    //struct deviceNode deviceNode_hash[16];
+    struct deviceNode * headDevice;
+    struct sockaddr_in clientAddr;
+
+}listeningNode;
+
+
+typedef struct modbusRegisterInfo{
+	int ord;
+	int addr;
+	int bytenum;
+	int datatype;
+	struct modbusRegisterInfo * next;
+}modbusRegisterInfo;
+
+/* client of ModBus that connect with current DTU
+ *  * few nodes
+ *   * */
+typedef struct deviceNode{
+	uint32_t deviceNumber;
+	uint32_t meterID;
+	uint32_t startRegister;
+	struct modbusRegisterInfo * modbusRegisterInfoHead;
+	struct deviceNode *next;
+}deviceNode;
+
+
+
+/* *
+ * status:
+ * 0	bad node
+ * 1	waiting for handle
+ * 2	processing
+ * */
+#define METERDATAPRIMARYSAVECOUNTCRITICAL 8
+typedef struct meterDataPrimary{
+        int sC;
+        int meterID;
+        float instantFlow;
+        unsigned long int totalFlow;
+        float T;
+        float P;
+        float DP;
+        uint8_t timestamp[10];
+        struct meterDataPrimary * next;
+}meterDataPrimary;
+
+#define METERDATASECONDARYSAVECOUNTCRITICAL 8
+typedef struct meterDataSecondary{
+    int sC;
+    int meterID;
+    uint8_t timestamp[10];
+	uint8_t order7[20];
+	uint8_t order8[20];
+	uint8_t order9[20];
+	uint8_t order10[20];
+	uint8_t order11[20];
+	uint8_t order12[20];
+	uint8_t order13[20];
+	uint8_t order14[20];
+	uint8_t order15[20];
+	uint8_t order16[20];
+	uint8_t order17[20];
+	uint8_t order18[20];
+	uint8_t order19[20];
+	uint8_t order20[20];
+	struct meterDataSecondary* next;
+}meterDataSecondary;
+
+
+
+extern pthread_mutex_t mtx;
+extern pthread_mutex_t data_save_mtx;
+
+extern pthread_cond_t condLNManager;
+extern pthread_cond_t condDataProcess;
+extern pthread_cond_t condDataProcessTimer;
+extern pthread_cond_t condDataSave;
+
+//udpMsgHead is head node of this two-way link-list
+extern udpMsg * udpMsgHead;
+////meterDataPrimaryHead is head node of this two-way link-list
+extern meterDataPrimary * meterDataPrimaryHead;
+////meterDataSecondaryHead is head node of this two-way link-list
+extern meterDataSecondary * meterDataSecondaryHead;
+//触发处理线程检查RBT的心跳和离线
+extern int RBTListeningNodeNumber;
+
+//save the number of current MeterDataToSave
+extern int MeterDataNumber;
+//网络数据包缓存链表计数
+extern int UdpMsgNumber;
+
+//
+//mysql descripter
+extern MYSQL *sql;
+extern MYSQL *sqlDataSave;
+//
+//
+///全程序共用的socket
+extern serv_sock;
+
+uint32_t  ModBusCRC16(unsigned char *updata,unsigned int len);
 
 #define MODBUSDATAUSHORTSIZE 2
 #define MODBUSDATASHORTSIZE 2
@@ -158,209 +325,6 @@ extern int memory_node_counter_DN;
 #define ORDER19 19
 #define ORDER20 20
 
-
-
-
-/**
- *  * udp data struct
- *   * two-way linked-list
- *    * used for Thread:
- *     * 1.Recvform of main
- *      * 2.and LNManager
- *       * 3.DataProcess
- *        * 
- *         * status:
- *          * 0    can not use
- *           * 1    can be processed by ThreadProcess
- *            * 2    processing by ThreadProcess
- *             * socket:
- *              * socket descripter
- *               * clientAddr:
- *                * from IP
- *                 * msg:
- *                  * message data from buffer
- *                   *
- *                    * */
-#define UDPNODESENDBACKTIMECRITCAL 8
-typedef struct udpMsg{
-//        char status;
-        struct sockaddr_in clientAddr;
-        uint8_t msg[BUFF_SIZE];
-        struct udpMsg * next;
-}udpMsg;
-
-/*
- * threadascription:
- * 0	NULL
- * 1	data process thread
- * 2	data save thread
- * threadstatus:
- * 0	no thread
- * 1	thread hung up
- * 2	thread running
- */
-
-//return:
-#define FREEDATAPROCESSTHREAD 1
-#define FREEDATASAVETHREAD 2
-
-#define MAXTHREADNUMBER 16
-
-#define THREADASCRIPTIONNULL 0
-#define THREADASCRIPTIONDATAPROCESS 1
-#define THREADASCRIPTIONDATASAVE 2
-#define THREADASCRIPTIONLNMANAGER 3
-
-#define THREADSTATUSNULL 0
-#define THREADSTATUSHUNGUP 1
-#define THREADSTATUSRUNNING 2
-
-#define THREADPOOLFILL 0
-
-#define THREADFREE 0
-#define THREADPERSIST 1
-typedef struct threadPoolInfo{
-	pthread_t tid;
-	uint8_t threadascription;
-	char threadstatus;
-	char cmd;
-}threadPoolInfo;
-
-//dt = 0 	wrong
-//dt = 1 	client data
-//dt = 2 	host data
-//dt = 3 	client or host data
-#define MODBUSDATAWRONG 0
-#define MODBUSDATACLIENTDATA 1
-#define MODBUSDATAHOSTDATA 2
-#define MODBUSDATACLIENTORHOSTDATA 3
-typedef struct mBDS{
-	uint8_t dT;
-        uint8_t addr;
-        uint8_t fC;
-        uint8_t bN;
-	uint16_t sR;
-	uint16_t rN;
-	uint16_t CRC;
-	uint8_t mBD[BUFF_SIZE-20];
-}mBDS;
-//#define ListeningNodeHost 7
-#define ListeningNodeHeartBeat 6
-//#define ListeningNodeUnknownFunctionCode 5
-//#define ListeningNodeListening 4
-typedef struct listeningNode {
-    uint32_t MBStatus;
-    uint32_t heartBeat;
-    struct rb_node node;
-    uint64_t DTUID;
-    time_t dumpTime;
-//这里建立一个哈希表的数据，256个仪表单元0xff，
-//用0xff%0xf来确定所属哈希表，然后进行最多16次比较即可确定元素
-    //struct deviceNode deviceNode_hash[16];
-    struct deviceNode * headDevice;
-    struct sockaddr_in clientAddr;
-
-}listeningNode;
-
-
-typedef struct modbusRegisterInfo{
-    int ord;
-    int addr;
-    int bytenum;
-    int datatype;
-	struct modbusRegisterInfo * next;
-}modbusRegisterInfo;
-
-/* client of ModBus that connect with current DTU
- *  * few nodes
- *   * */
-typedef struct deviceNode{
-    uint32_t deviceNumber;
-    uint32_t meterID;
-    uint32_t startRegister;
-	struct modbusRegisterInfo * modbusRegisterInfoHead;
-    struct deviceNode *next;
-}deviceNode;
-
-
-
-/* *
- * status:
- * 0	bad node
- * 1	waiting for handle
- * 2	processing
- * */
-#define METERDATAPRIMARYSAVECOUNTCRITICAL 8
-typedef struct meterDataPrimary{
-        int sC;
-        int meterID;
-        float instantFlow;
-        unsigned long int totalFlow;
-        float T;
-        float P;
-        float DP;
-        uint8_t timestamp[10];
-        struct meterDataPrimary * next;
-}meterDataPrimary;
-
-#define METERDATASECONDARYSAVECOUNTCRITICAL 8
-typedef struct meterDataSecondary{
-    int sC;
-    int meterID;
-    uint8_t timestamp[10];
-	uint8_t order7[20];
-	uint8_t order8[20];
-	uint8_t order9[20];
-	uint8_t order10[20];
-	uint8_t order11[20];
-	uint8_t order12[20];
-	uint8_t order13[20];
-	uint8_t order14[20];
-	uint8_t order15[20];
-	uint8_t order16[20];
-	uint8_t order17[20];
-	uint8_t order18[20];
-	uint8_t order19[20];
-	uint8_t order20[20];
-	struct meterDataSecondary* next;
-}meterDataSecondary;
-
-//thread information table
-extern threadPoolInfo ThreadPool[MAXDATAPROCESSSAVETHREADNUMBER]; 
-
-
-extern pthread_mutex_t mtx;
-extern pthread_mutex_t data_save_mtx;
-
-extern pthread_cond_t condLNManager;
-extern pthread_cond_t condDataProcess;
-extern pthread_cond_t condDataProcessTimer;
-extern pthread_cond_t condDataSave;
-
-//udpMsgHead is head node of this two-way link-list
-extern udpMsg * udpMsgHead;
-////meterDataPrimaryHead is head node of this two-way link-list
-extern meterDataPrimary * meterDataPrimaryHead;
-////meterDataSecondaryHead is head node of this two-way link-list
-extern meterDataSecondary * meterDataSecondaryHead;
-//触发处理线程检查RBT的心跳和离线
-extern int RBTListeningNodeNumber;
-
-//save the number of current MeterDataToSave
-extern int MeterDataNumber;
-//网络数据包缓存链表计数
-extern int UdpMsgNumber;
-
-//
-//mysql descripter
-extern MYSQL *sql;
-extern MYSQL *sqlDataSave;
-//
-//
-///全程序共用的socket
-extern serv_sock;
-
-uint32_t  ModBusCRC16(unsigned char *updata,unsigned int len);
 
 
 #endif

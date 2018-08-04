@@ -51,11 +51,11 @@ void RBTFree(struct listeningNode *node);
 //
 //deviceNode和ModBusRegisterInfo链表处理
 //从mysql读东西
-int GetMeterID(udpMsg * p,uint8_t * dtuidstrtmp,uint8_t addrstrtmp);
+int GetMeterID(udpMsg * p,uint64_t dtuid,uint8_t addrstrtmp);
 //generate or updata listeningNode's deviceNode link from mysql
-deviceNode * CreateDeviceNodeCircleFromMysql(uint64_t dtuid);
+int  CreateDeviceNodeCircleFromMysql(struct listeningNode *p);
 //generate or updata deviceNode's modbusRegisterInfo link from mysql
-modbusRegisterInfo * CreateModBusRegisterInfoCircleFromMysql(deviceNode *p1);
+int CreateModBusRegisterInfoCircleFromMysql(deviceNode *p);
 //从mysql读东西
 
 
@@ -181,7 +181,7 @@ void * ThreadDataProcess(void * arg){
 #endif
 			pthread_cond_wait(&condDataProcess,&mtx);
 #ifdef DEBUG
-		printf("数据处理线程——第%d————次醒来处理数据,时间-%s",++counter,get_str_time_now());
+			printf("数据处理线程——第%d————次醒来处理数据,时间-%s",++counter,get_str_time_now());
 #endif
 			//if thread resume back to while(1)
 			//continue;
@@ -202,27 +202,26 @@ void * ThreadDataProcess(void * arg){
 //Until here we have LN.if no LN we had created it.*/
 //Until here we have LN.if no LN we had created it.*/
 //2.1 if udpmsg is not in RBT listeningNode,insert it
-        if((p1=RBTSearch(&listeningNodeRoot,dtuid))==NULL){
+		if((p1=RBTSearch(&listeningNodeRoot,dtuid))==NULL){
 			//create a new listeningNode
 			if((p1 = (listeningNode*)malloc(sizeof(listeningNode))) == NULL){
 				printf("listeningNode out of memory");
 				//if thread resume back to while(1)
-				continue;
+				goto data_process_continue;
 			}
 #ifdef DEBUG_outofmemory
 			//测试内存溢出的问题
-			printf("++LNode堆缓存计数%d\n",++memory_node_counter_LNode);
+			printf("+++++++++++++++LNode堆缓存计数%d--没有查找到LNode,创建的DTUID为：%d\n",++memory_node_counter_LNode,dtuid);
 			//测试内存溢出的问题
 #endif
 			memset(p1,0,(sizeof(listeningNode)));
 			//set new listeningNode's dtuid
 			p1 -> DTUID = dtuid;
-            //reset listeningNode's dumptime
-            p1 -> dumpTime=time(NULL);
-            p1 -> clientAddr = p -> clientAddr;
-
-            RBTInsert(&listeningNodeRoot,p1);
-        }
+			 //reset listeningNode's dumptime
+			p1 -> dumpTime=time(NULL);
+			p1 -> clientAddr = p -> clientAddr;
+			RBTInsert(&listeningNodeRoot,p1);
+		}
         //save this node's MBStatus
 //2.1 if udpmsg is not in RBT listeningNode,insert it
 //Until here we have LN.if no LN we had created it.*/
@@ -237,279 +236,144 @@ void * ThreadDataProcess(void * arg){
 
 
 //2.2 udp data and listeningNode is ready,now we will handle it
-//2.2 udp data and listeningNode is ready,now we will handle it
-//2.2 udp data and listeningNode is ready,now we will handle it
-
-//2.2.1 handle heart beat data
+		//handle heart beat data
 		if(!memcmp(p -> msg+DTUIDSIZE,HEARTBEATSTR,sizeof(HEARTBEATSTR))){
-			//if there is a listeningNode,count it's heart beat
-			p1 -> heartBeat++;
-			free(p);
-#ifdef DEBUG_outofmemory
-			printf("--udpmsg缓存个数：%d\n",--memory_node_counter_udpmsg);
-#endif
-			p=NULL;
-            p1 -> dumpTime=time(NULL);
-			//if thread resume back to while(1)
-			continue;
+			goto data_process_reset_connect;
 		}
-//2.2.1 manage heart beat data
 
-        //对于有效ModBus仪表数据，在DTU+2指针取得肯定是ModBus消息长度，+5是将ModBus地址、功能码、长度码、CRC校验码算入
-        imodbus=*(p -> msg + DTUIDSIZE + 2)+ 5;
-
-        //place modbus data
+		//对于有效ModBus仪表数据，在DTU+2指针取得肯定是ModBus消息长度，+5是将ModBus地址、功能码、长度码、CRC校验码算入
+		imodbus=*(p -> msg + DTUIDSIZE + 2)+ 5;
 		memset(modbusstrtmp,0,sizeof(modbusstrtmp));
 		memcpy(modbusstrtmp,p -> msg+DTUIDSIZE,imodbus); 
-
 		memset(&mbds,0,sizeof(mbds));
-        SplitModBusData(&mbds,&modbusstrtmp[0],imodbus);
-
-//2.2.2 remove situation CRC16 check failed
-        if(mbds.CRC!=ModBusCRC16(modbusstrtmp,imodbus-MODBUSCRCDATASIZE)){
-			p1 -> heartBeat++;
-			if(p!=NULL){
-				free(p);
-#ifdef DEBUG_outofmemory
-			printf("--udpmsg缓存个数：%d\n",--memory_node_counter_udpmsg);
-#endif
-				p = NULL;
-			}
-            p1 -> dumpTime=time(NULL);
-			//if thread resume back to while(1)
-			continue;
-        }
-//2.2.2 remove situation CRC16 check failed
-//2.2 udp data and listeningNode is ready,now we will handle it
-//2.2 udp data and listeningNode is ready,now we will handle it
-//2.2 udp data and listeningNode is ready,now we will handle it
-
-#ifdef DEBUG
-dataprocessconter++;
-printf("\ndataprocessconter: %d ,DTUID: %ld --- heartBeatNumber: %d,imodbus:%d\n\n",dataprocessconter,p1->DTUID,p1->heartBeat,imodbus);
-#endif
-
-//2.3 from now udpMsg is confirmed have device address,so i can identify it's meterID\startRegister*/
-//2.3 from now udpMsg is confirmed have device address,so i can identify it's meterID\startRegister*/
-//2.3 from now udpMsg is confirmed have device address,so i can identify it's meterID\startRegister*/
-
-//2.3.1 get meter id
-        meterid=GetMeterID(p,dtuidstrtmp,mbds.addr);
-		//check if meter id is correct
-        if(meterid == 0){
-			//save it's IP address
-			//zero it's dumptime
-			p1 -> heartBeat++;
-			if(p != NULL){
-				free(p);
-#ifdef DEBUG_outofmemory
-				printf("--udpmsg缓存个数：%d\n",--memory_node_counter_udpmsg);
-#endif
-				p=NULL;
-			}
-            p1 -> dumpTime=time(NULL);
-			//if thread resume back to while(1)
-			continue;
-        }
-
-#ifdef DEBUG
-        printf("\n******************************************************\n"
-               "current meterID = %d\n"
-               "******************************************************\n",meterid);
-#endif
-//2.3.1 get meter id
-
-//2.3.2 get device node from listeningNode
-        //if there is a correct meterid
-        dnp=GetDeviceNodeComfortMeterid(p1,meterid);
-        //if RBT p1 have no device node comfort to udpMsg's meterid
-        if((dnp == NULL)||!(dnp -> modbusRegisterInfoHead)){
-            if(dnpp =CreateDeviceNodeCircleFromMysql(p1 -> DTUID)){
-                FreeDeviceNodeCircle(p1 -> headDevice);
-                p1 -> headDevice = dnpp;
-                dnpp = NULL;
-            }else{
-                printf("\nAlarm:mysql have no device node info about DTUID %ld",p1 -> DTUID);
-				//zero it's dumptime
-				p1 -> heartBeat++;
-				if(p != NULL){
-					free(p);
-#ifdef DEBUG_outofmemory
-					printf("--udpmsg缓存个数：%d\n",--memory_node_counter_udpmsg);
-#endif
-					p=NULL;
-                }
-                p1 -> dumpTime=time(NULL);
-				continue;
-            }
-        }
-        dnp=GetDeviceNodeComfortMeterid(p1,meterid);
-        if((dnp == NULL)||!(dnp -> modbusRegisterInfoHead)){
-            printf("\nAlarm:mysql have no  info about meterID %d",meterid);
-            //zero it's dumptime
-            p1 -> heartBeat++;
-            if(p != NULL){
-                free(p);
-#ifdef DEBUG_outofmemory
-		printf("--udpmsg缓存个数：%d\n",--memory_node_counter_udpmsg);
-#endif
-
-                p=NULL;
-            }
-            p1 -> dumpTime=time(NULL);
-            continue;
-        }
-
-//2.3.2 get device node from listeningNode
-//2.3 from now udpMsg is confirmed have device address,so i can identify it's meterID\startRegister*/
-//2.3 from now udpMsg is confirmed have device address,so i can identify it's meterID\startRegister*/
-//2.3 from now udpMsg is confirmed have device address,so i can identify it's meterID\startRegister*/
-
-//2.4 now we have all modbus data,manage data which is not from modbus client
-//2.4 now we have all modbus data,manage data which is not from modbus client
-//2.4 now we have all modbus data,manage data which is not from modbus client
-//2.4.1 manage unknown data(unknown function code on modbus wire)
-        //check modbus function code
-        if(mbds.fC != MODBUSFUNCCODE){
-		//if it is not 0x03,this driver can not deal with it.we can extend this function in next relase
-			p1 -> heartBeat++;
-			if(p != NULL){
-				free(p);
-#ifdef DEBUG_outofmemory
-		printf("--udpmsg缓存个数：%d\n",--memory_node_counter_udpmsg);
-#endif
-				p=NULL;
-			}
-//			if(p1 -> MBStatus != ListeningNodeHost)
-//				p1 -> MBStatus = ListeningNodeUnknownFunctionCode;
-            p1 -> dumpTime=time(NULL);
-            //if thread resume back to while(1)
-			continue;
+		SplitModBusData(&mbds,&modbusstrtmp[0],imodbus);
+		//remove situation CRC16 check failed
+		if(mbds.CRC!=ModBusCRC16(modbusstrtmp,imodbus-MODBUSCRCDATASIZE)){
+			goto data_process_reset_connect;
 		}
-//2.4.1manage unknown data(unknown function code on modbus wire)
+//2.2 udp data and listeningNode is ready,now we will handle it
 
-//2.4.2manage modbus host data(host on modbus wire)
+#ifdef DEBUG
+		dataprocessconter++;
+		printf("\ndataprocessconter: %d ,DTUID: %ld --- heartBeatNumber: %d,imodbus:%d\n\n",dataprocessconter,p1->DTUID,p1->heartBeat,imodbus);
+#endif
+
+//2.3 from now udpMsg is confirmed have device address,so i can identify it's meterID\startRegister*/
+		meterid=GetMeterID(p,dtuid,mbds.addr);
+		//check if meter id is correct
+		if(meterid == 0){
+			goto data_process_reset_connect;
+		}
+
+#ifdef DEBUG
+		printf("\n******************************************************\n"
+		       "current meterID = %d\n"
+		       "******************************************************\n",meterid);
+#endif
+
+//2.3.2 get device node from listeningNode
+		dnp=GetDeviceNodeComfortMeterid(p1,meterid);
+        	if((dnp == NULL)||(dnp -> modbusRegisterInfoHead == NULL)){
+#ifdef DEBUG
+			if(dnp == NULL)
+				printf("这次创建节点是由于没有DN符合");
+			if(dnp&&dnp -> modbusRegisterInfoHead == NULL)
+				printf("这次创建节点是由于DN没有MBRI符合");
+#endif
+			if(CreateDeviceNodeCircleFromMysql(p1)){
+				printf("\nAlarm:mysql have no device node info about DTUID %ld",p1 -> DTUID);
+				goto data_process_reset_connect;
+				//zero it's dumptime
+			}
+			dnp=GetDeviceNodeComfortMeterid(p1,meterid);
+			if((dnp == NULL)||(dnp -> modbusRegisterInfoHead == NULL)){
+				printf("\nAlarm:mysql have no  info about meterID %d\n",meterid);
+				goto data_process_reset_connect;
+			}
+		}
+//2.3 from now udpMsg is confirmed have device address,so i can identify it's meterID\startRegister*/
+
+//2.4 now we have all modbus data,manage data which is not from modbus client
+		//check modbus function code
+        	if(mbds.fC != MODBUSFUNCCODE){
+			goto data_process_reset_connect;
+		}
+
+		//manage modbus host data(host on modbus wire)
 		//if it is 0x03,check if it is host or client
 		//if data fit with host data size,check if position of byte number counter is fit with register data number
-        if((imodbus == MODBUSHOSTDATASIZE)&&(mbds.bN!= 3)){
-			//if p1 is host status ,change it to listening status;	
-//			p1 -> MBStatus = ListeningNodeListening;
+        	if((imodbus == MODBUSHOSTDATASIZE)&&(mbds.bN!= 3)){
 			p1 -> heartBeat=0;
 			//3is the byte number when the length of modbus data is 8, this is host data,analysis it
 			//get it's start register 
-
-            if((dnp -> startRegister!=mbds.sR)){
-                if(dnpp =CreateDeviceNodeCircleFromMysql(p1 -> DTUID)){
-                    FreeDeviceNodeCircle(p1 -> headDevice);
-                    p1 -> headDevice = dnpp;
-                    dnpp = NULL;
-                }else{
+            		if((dnp -> startRegister!=mbds.sR)){
+				if(CreateDeviceNodeCircleFromMysql(p1)){
 					//we have no need to go to sleep,host data finally go to sleep
-                    printf("\nAlarm:mysql have no device node info about DTUID %ld",p1 -> DTUID);
+					printf("\nAlarm:mysql have no device node info about DTUID %ld",p1 -> DTUID);
 				}
-                if(dnp -> startRegister!=mbds.sR){
-                    printf("\nAlarm:modbus host commond start register is not fit mysql,but listeningNode is fit with mysql,i have synchronization listeningNode with current modbus host data");
+				if(dnp -> startRegister!=mbds.sR){
+					printf("\nAlarm:modbus host commond start register is not fit mysql,but listeningNode is fit with mysql,i have synchronization listeningNode with current modbus host data");
 				}else{
-                    printf("\nAlarm:modbus host commond start register is not fit mysql,listeningNode is not fit with mysql too,i have synchronization listeningNode with current modbus host data");
+					printf("\nAlarm:modbus host commond start register is not fit mysql,listeningNode is not fit with mysql too,i have synchronization listeningNode with current modbus host data");
 				}
 
 			}
-			if(p != NULL){
-				free(p);
-#ifdef DEBUG_outofmemory
-		printf("--udpmsg缓存个数：%d\n",--memory_node_counter_udpmsg);
-#endif
-				p = NULL;
-			}
-            p1 -> dumpTime=time(NULL);
-            //if thread resume back to while(1)
-			continue;
+            		p1 -> dumpTime=time(NULL);
+			goto data_process_continue;
 		}
-//2.4.2manage modbus host data(host on modbus wire)
 
-//2.4.3 manage host/client confused data
+		//manage host/client confused data
 		//(i have no solution for this situation,
 		//maybe we can set modbus data should have timestamp
 		//(timestamp is bigger than 3byte,then client data 
 		//is bigger than 8))
-        if((imodbus == MODBUSHOSTDATASIZE)&&(mbds.bN== 3)){
-			p1 -> heartBeat++;
-			if(p != NULL){
-				free(p);
-#ifdef DEBUG_outofmemory
-		printf("--udpmsg缓存个数：%d\n",--memory_node_counter_udpmsg);
-#endif
-				p = NULL;
-			}
-            p1 -> dumpTime=time(NULL);
-			continue;
+        	if((imodbus == MODBUSHOSTDATASIZE)&&(mbds.bN== 3)){
+			goto data_process_reset_connect;
 		}
-//2.4.3 manage host/client confused data
 
-//2.4 now we have all modbus data,manage data which is not from modbus client
-//2.4 now we have all modbus data,manage data which is not from modbus client
 //2.4 now we have all modbus data,manage data which is not from modbus client
 
 
-//2.5 handle client data,all bad situation had removed,i can sure this is client message,
-//2.5 handle client data,all bad situation had removed,i can sure this is client message,
 //2.5 handle client data,all bad situation had removed,i can sure this is client message,
 //@2017/0803/23:16
 //@raingrey
-//2.5.1 prepare
 		i=0;
-		//check if received modbus byte num is comfort to mysql's register info
-        pmbri = dnp -> modbusRegisterInfoHead;
-        do{
-            i += pmbri -> bytenum;
-            pmbri = pmbri -> next;
-            if(i == mbds.bN)
-                break;
-        }while(dnp -> modbusRegisterInfoHead != pmbri);
-
+		//仪表应答数据是有可能不如与登记数据长度不符的，因此遍历modbusRegisterInfoHead从头算一下
+		for(pmbri = dnp -> modbusRegisterInfoHead;pmbri;pmbri = pmbri -> next){
+			i += pmbri -> bytenum;
+			if(i == mbds.bN)
+				break;
+		}
 		//if there is some data broken;
-        if(i!=mbds.bN){
-            printf("\nAlarm:modbus data has broken,not comfort to mysql's register info for meterid:%d 's data analsys",meterid);
-			p1 -> heartBeat = 0;
-//			if(p1 -> MBStatus != ListeningNodeHost)
-//				p1 -> MBStatus = ListeningNodeListening;
-			if(p != NULL){
-				free(p);
-#ifdef DEBUG_outofmemory
-		printf("--udpmsg缓存个数：%d\n",--memory_node_counter_udpmsg);
-#endif
-				p=NULL;
-			}
-            p1 -> dumpTime=time(NULL);
-			//if thread resume back to while(1)
-			continue;
+		if(i!=mbds.bN){
+			printf("\nAlarm:modbus data has broken,not comfort to mysql's register info for meterid:%d 's data analsys",meterid);
+			goto data_process_reset_connect;
 		}
 		pmbri = dnp -> modbusRegisterInfoHead;
 		i=0;
-        //create meterDataPrimary node
-        //create meterDataSecondary node
-        if(meterdataprimary)	memset(meterdataprimary,0,sizeof(meterDataPrimary));
-        else {
-		meterdataprimary= (meterDataPrimary*)malloc(sizeof(meterDataPrimary));
+		//create meterDataPrimary node
+		//create meterDataSecondary node
+		if(meterdataprimary)	memset(meterdataprimary,0,sizeof(meterDataPrimary));
+		else {
+			meterdataprimary= (meterDataPrimary*)malloc(sizeof(meterDataPrimary));
+				//测试内存溢出的问题
+	#ifdef DEBUG_outofmemory
+				printf("++datasave堆缓存计数%d--申请了常规有效数据\n",++memory_node_counter_datasave);
+	#endif
+				//测试内存溢出的问题
+		
+		}
+		if(meterdatasecondary)	memset(meterdatasecondary,0,sizeof(meterDataSecondary));
+		else {
+			meterdatasecondary = (meterDataSecondary*)malloc(sizeof(meterDataSecondary));
 			//测试内存溢出的问题
-#ifdef DEBUG_outofmemory
-			printf("++datasave堆缓存计数%d\n",++memory_node_counter_datasave);
-#endif
+	#ifdef DEBUG_outofmemory
+			printf("++datasave堆缓存计数%d--申请了用户自定义数据\n",++memory_node_counter_datasave);
+	#endif
 			//测试内存溢出的问题
-	
-	}
-        if(meterdatasecondary)	memset(meterdatasecondary,0,sizeof(meterDataSecondary));
-        else {
-		meterdatasecondary = (meterDataSecondary*)malloc(sizeof(meterDataSecondary));
-		//测试内存溢出的问题
-#ifdef DEBUG_outofmemory
-		printf("++datasave堆缓存计数%d\n",++memory_node_counter_datasave);
-#endif
-		//测试内存溢出的问题
-	}
-        meterdataprimary -> meterID = meterid;
-        meterdatasecondary -> meterID = meterid;
-//2.5.1 prepare
+		}
+		meterdataprimary -> meterID = meterid;
+		meterdatasecondary -> meterID = meterid;
 //
 //2.5.2 handle it one by one
         do{
@@ -518,11 +382,11 @@ printf("\ndataprocessconter: %d ,DTUID: %ld --- heartBeatNumber: %d,imodbus:%d\n
             modbusdataushort=0;
             modbusdatafloat=0;
             modbusdatadouble=0;
-			memset(modbusdatabuffer,0,sizeof(modbusdatabuffer));
-			if(pmbri -> ord <= ORDERPRIMARYNUMBER)
-				primarydatasign = 1;
-			else if(pmbri -> ord > ORDERPRIMARYNUMBER)
-				secondarydatasign = 1;
+		memset(modbusdatabuffer,0,sizeof(modbusdatabuffer));
+		if(pmbri -> ord <= ORDERPRIMARYNUMBER)
+			primarydatasign = 1;
+		else if(pmbri -> ord > ORDERPRIMARYNUMBER)
+			secondarydatasign = 1;
             k=pmbri -> ord;
             switch(pmbri -> datatype){
 			//ushort data handler
@@ -693,6 +557,15 @@ printf("\ndataprocessconter: %d ,DTUID: %ld --- heartBeatNumber: %d,imodbus:%d\n
 		pthread_cond_signal(&condDataSave);
 	}
         pthread_mutex_unlock(&data_save_mtx);
+data_process_reset_connect:
+		p1 -> heartBeat++;
+            	p1 -> dumpTime=time(NULL);
+data_process_continue:
+#ifdef DEBUG_outofmemory
+		printf("--udpmsg缓存个数：%d--网络数据被复制完\n",--memory_node_counter_udpmsg);
+#endif
+		free(p);
+		p=NULL;
 	}
 //2.5.3 send meterdata to it's link
 //
@@ -739,8 +612,10 @@ char SplitModBusData(mBDS *mbds,uint8_t *mbst,char n){
 
 deviceNode * GetDeviceNodeComfortMeterid(listeningNode *p,uint32_t meterid){
 	deviceNode * dnp = p -> headDevice;
-	if(!dnp)    return dnp;
-	while((dnp)){
+	while(dnp){
+#ifdef DEBUG
+		printf("GetDeviceNodeComfortMeterid-----DN->meterID=%d----searching for meterid=%d",dnp -> meterID,meterid);
+#endif
 		if(dnp -> meterID == meterid){
 			break;
 		}
@@ -761,19 +636,20 @@ udpMsg * UdpMsgNodeWaitingForHandle(){
     return NULL;
 }
 
-int GetMeterID(udpMsg * p,uint8_t * dtuidstrtmp,uint8_t addrstrtmp){
+int GetMeterID(udpMsg * p,uint64_t dtuid,uint8_t addrstrtmp){
 	uint8_t querystrtmp[MYSQLQUERYSTRSIZE] = {0};
 	int meterid=0;
-	sprintf(querystrtmp,"select meterID from MeterIdentify where DTUID=%s and deviceNumber=%d",dtuidstrtmp,addrstrtmp);
+//        printf("\n%d\n",dtuid);
+	sprintf(querystrtmp,"select meterID from MeterIdentify where DTUID=%ld and deviceNumber=%d",dtuid,addrstrtmp);
 	MYSQL_RES * mysqlres=NULL;
 	MYSQL_ROW mysqlrow;
 	if(mysql_real_query(sql,querystrtmp,strlen(querystrtmp))){
-        printf("\n%s\n",querystrtmp);
-        printf("\nfailed to query mysql when handle %s,mysql,dtuid:%s,addrstrtmp:%d, error msg%s\n",p -> msg,dtuidstrtmp,addrstrtmp,mysql_error(sql));
+		printf("\n%s\n",querystrtmp);
+		printf("\nfailed to query mysql when handle %s,mysql,dtuid:%ld,addrstrtmp:%d, error msg%s\n",p -> msg,dtuid,addrstrtmp,mysql_error(sql));
 		return MYSQLFAILED;
 	}
 	if(!(mysqlres=mysql_store_result(sql))){
-        printf("\nfailed to get result of  mysql when handle %s,mysql,dtuid:%s,addrstrtmp:%d, error msg%s\n",p -> msg,dtuidstrtmp,addrstrtmp,mysql_error(sql));
+        printf("\nfailed to get result of  mysql when handle %s,mysql,dtuid:%ld,addrstrtmp:%d, error msg%s\n",p -> msg,dtuid,addrstrtmp,mysql_error(sql));
 		return MYSQLFAILED;
 	}
     if(mysqlrow=mysql_fetch_row(mysqlres))
@@ -787,42 +663,48 @@ int GetMeterID(udpMsg * p,uint8_t * dtuidstrtmp,uint8_t addrstrtmp){
     return meterid;
 }
 
-modbusRegisterInfo * CreateModBusRegisterInfoCircleFromMysql(deviceNode * p1){
+int CreateModBusRegisterInfoCircleFromMysql(deviceNode * p){
 
     uint8_t querystrtmp[MYSQLQUERYSTRSIZE] = {0};
     /// get  of this device from mysql
     MYSQL_RES * mysqlres=NULL;
     MYSQL_ROW mysqlrow;
-    char i=0;
+    int i=0;
     modbusRegisterInfo * mp1=NULL;
     modbusRegisterInfo * mp2=NULL;
+    modbusRegisterInfo * lastmp1=NULL;
     time(&LocalTime);
     /// get modbusRegisterInfo from mysql
-    /// get modbusRegisterInfo from mysql
-    /// get modbusRegisterInfo from mysql
-    sprintf(querystrtmp,"select ord,address,byteNumber,dataType from DataIdentify where meterID=%d order by address ASC,ord ASC",p1 -> meterID);
+    sprintf(querystrtmp,"select ord,address,byteNumber,dataType from DataIdentify where meterID=%d order by address ASC,ord ASC",p -> meterID);
 	if(mysql_real_query(sql,querystrtmp,strlen(querystrtmp))){
-        printf("\n%sfailed to query mysql when handle deviceNode meterid:%d,deviceNumber:%d, error msg%s\n",ctime(&LocalTime),p1 -> meterID,p1 -> deviceNumber,mysql_error(sql));
-        return NULL;
+		printf("\n%sfailed to query mysql when handle deviceNode meterid:%d,deviceNumber:%d, error msg%s\n",ctime(&LocalTime),p -> meterID,p -> deviceNumber,mysql_error(sql));
+		return 1;
 	}
 	if(!(mysqlres=mysql_store_result(sql))){
-        printf("\n%s failed to get result of mysql when handle deviceNode meterid:%d,deviceNumber:%d, error msg%s\n",ctime(&LocalTime),p1 -> meterID,p1 -> deviceNumber,mysql_error(sql));
+        printf("\n%s failed to get result of mysql when handle deviceNode meterid:%d,deviceNumber:%d, error msg%s\n",ctime(&LocalTime),p -> meterID,p -> deviceNumber,mysql_error(sql));
 		mysql_free_result(mysqlres);
 		mysqlres = NULL;
-        return NULL;
+        return 1;
 	}
     /// get modbusRegisterInfo from mysql
-    /// get modbusRegisterInfo from mysql
-    /// get modbusRegisterInfo from mysql
 
 
-    /// create modbusRegisterInfo circle
-    /// create modbusRegisterInfo circle
     /// create modbusRegisterInfo circle
     while(mysqlrow=mysql_fetch_row(mysqlres)){
+	//首先，MBRI链中已有数据要剔除,然后，还要更新此阶位下已有数据
+	i=atoi(mysqlrow[0]);
+	for(mp1 = p -> modbusRegisterInfoHead;mp1;lastmp1=mp1,mp1 = mp1 -> next)
+		if(i == mp1 -> ord){
+			mp1 -> addr= atoi(mysqlrow[1]);
+			mp1 -> bytenum= atoi(mysqlrow[2]);
+			mp1 -> datatype= atoi(mysqlrow[3]);
+			break;
+		}
+	if(mp1) continue;
         mp2 = (modbusRegisterInfo *)malloc(sizeof(modbusRegisterInfo));
 #ifdef DEBUG_outofmemory
-	printf("++ModBusRegisterInfo堆缓存计数%d\n",++memory_node_counter_MBRI);
+	if(memory_node_counter_MBRI%100 == 0)
+		printf("++ModBusRegisterInfo堆缓存计数%d--创建MBRI，meterID=%d,ord=%d,addr=%d,bytenum=%d,datatype=%d\n",++memory_node_counter_MBRI,p->meterID,atoi(mysqlrow[0]),atoi(mysqlrow[1]),atoi(mysqlrow[2]),atoi(mysqlrow[3]));
 #endif
         memset(mp2,0,sizeof(modbusRegisterInfo));
         //get modbusRegisterInfo
@@ -832,119 +714,103 @@ modbusRegisterInfo * CreateModBusRegisterInfoCircleFromMysql(deviceNode * p1){
         mp2 -> datatype= atoi(mysqlrow[3]);
         if(MYSQLSTARTREGISTERORD == mp2 -> ord){
             //startregister could be 0;don't check it by 0;
-            p1 -> startRegister=mp2 -> addr;
+            p -> startRegister=mp2 -> addr;
             //one result for per modbusbytenumber per device
         }
-        if(mp1){
-            mp1 -> next = mp2;
-        }else{
-            mp1 = mp2;
-        }
+	//当modbusRegisterInfoHead没有元素
+	if(! p -> modbusRegisterInfoHead){
+		p -> modbusRegisterInfoHead = mp2;
+	}else{
+		lastmp1 -> next = mp2;
+	}
+	mp2 = NULL;
     }
-    /// create modbusRegisterInfo circle
-    /// create modbusRegisterInfo circle
-    /// create modbusRegisterInfo circle
 
-    /// send circle back or alarm
-    /// send circle back or alarm
-    /// send circle back or alarm
-    if(mysqlres!=NULL){
         mysql_free_result(mysqlres);
         mysqlres = NULL;
-    }
-    if(!mp1){
-        printf("\n %s Alarm:mysql have no device node Regisger info about meterID %d\n",ctime(&LocalTime),p1 -> meterID);
-    }
-    /// send circle back or alarm
-    /// send circle back or alarm
-    /// send circle back or alarm
-    return mp1;
+	return 0;
 }
 
-deviceNode * CreateDeviceNodeCircleFromMysql(uint64_t dtuid){
-    uint8_t querystrtmp[MYSQLQUERYSTRSIZE] = {0};
-    uint8_t i=0;
-    deviceNode * p1 = NULL;
-    deviceNode * p2 = NULL;
-    modbusRegisterInfo * mp1 = NULL;
+int CreateDeviceNodeCircleFromMysql(listeningNode * p){
+	uint64_t dtuid = p -> DTUID;
+	uint8_t querystrtmp[MYSQLQUERYSTRSIZE] = {0};
+	uint8_t i=0;
+	deviceNode * p1 = NULL;
+	deviceNode * p2 = NULL;
+	deviceNode * lastp1 = NULL;
+	modbusRegisterInfo * mp1 = NULL;
     /// get  of this device from mysql
 	MYSQL_RES * mysqlres=NULL;
 	MYSQL_ROW mysqlrow;
-    time(&LocalTime);
+	time(&LocalTime);
 
-    /// get device node data from mysql
-    /// get device node data from mysql
-    /// get device node data from mysql
-    sprintf(querystrtmp,
+	/// get device node data from mysql
+	sprintf(querystrtmp,
             "select deviceNumber,meterID from MeterIdentify where DTUID=%ld",
             dtuid);
 	if(mysql_real_query(sql,querystrtmp,strlen(querystrtmp))){
-        printf("\n%s failed to query mysql when handle listeningNode DTUID:%ld,error msg%s\n",
-               ctime(&LocalTime),dtuid,mysql_error(sql));
-        return NULL;
+		printf("\n%s failed to query mysql when handle listeningNode DTUID:%ld,error msg%s\n",
+               		ctime(&LocalTime),dtuid,mysql_error(sql));
+		return 1;
 	}
 	if(!(mysqlres=mysql_store_result(sql))){
-        printf("\nfailed to get result of mysql when handle listeningNode DTUID:%d,error msg%s\n",dtuid,mysql_error(sql));
+		printf("\nfailed to get result of mysql when handle listeningNode DTUID:%d,error msg%s\n",dtuid,mysql_error(sql));
 		if(mysqlres!=NULL){
-            mysql_free_result(mysqlres);
+			mysql_free_result(mysqlres);
 			mysqlres = NULL;
 		}
-        return NULL;
+        	return 1;
 	}
-    /// get device node data from mysql
-    /// get device node data from mysql
-    /// get device node data from mysql
+    	/// get device node data from mysql
 
 
-    /// create device node circle
-    /// create device node circle
     /// create device node circle
     while(mysqlrow=mysql_fetch_row(mysqlres)){
-        //deviceNode: apply memory and init to circle
-        //这里不能轻率的申请一段内存，而是应该检查meterID是否重复
-        //重复的话可直接跳过，
-        //如果不重复的话可加入
-        //如果走完以后，！！存在！！没加入的内存，还要释放内存
+	//确定只有没被添加过得DN才会申请内存并添加
+	i=atoi(mysqlrow[1]);
+	for(p1 = p -> headDevice;p1;lastp1=p1,p1 = p1 -> next){//lastp1用于存放链表最后一个元素(用于被插)
+#ifdef DEBUG
+//		printf("i和p1->meterID为%d-%d\n",i,p1->meterID);
+#endif
+		if(i == p1 -> meterID){
+        		p1 -> deviceNumber = atoi(mysqlrow[0]);
+#ifdef DEBUG
+			printf("跳过了重复的meterID\n");
+#endif
+			break;
+		}
+	}
+	if(p1)	continue;
+	//确定只有没被添加过得DN才会申请内存并添加
+
         p2 = (deviceNode *)malloc(sizeof(deviceNode));
 #ifdef DEBUG_outofmemory
-	printf("++deviceNode堆缓存计数%d\n",++memory_node_counter_DN);
+//	if(memory_node_counter_DN%100 == 0)
+		printf("++deviceNode堆缓存计数%d--创建新DN-meterID=%d,deviceNumber=%d\n",++memory_node_counter_DN,atoi(mysqlrow[1]),atoi(mysqlrow[0]));
 #endif
         memset(p2,0,sizeof(deviceNode));
         p2 -> deviceNumber = atoi(mysqlrow[0]);
         p2 -> meterID = atoi(mysqlrow[1]);
-        if(mp1 = CreateModBusRegisterInfoCircleFromMysql(p2)){
-            p2 -> modbusRegisterInfoHead = mp1;
-        }else{
-            p2 -> modbusRegisterInfoHead = NULL;
+        if(CreateModBusRegisterInfoCircleFromMysql(p2)){
             printf("\n%s Alarm: No ModBusRegisterInfo founded when create modbusRegisterInfo circle for deviceNode %d",ctime(&LocalTime),p2 -> meterID);
         }
-
-        if(!p1){
-            p1 = p2;
-	    p2=NULL;
-        }else{
-            p1 -> next = p2;
-            p1 = p2;
-	    p2=NULL;
-        }
-
+	//当headDevice没有元素
+	if(p -> headDevice == NULL){
+		p -> headDevice = p2;
+	}else{
+		lastp1 -> next = p2;
+	}
+	p2=NULL;
     }
     /// create device node circle
     /// create device node circle
     /// create device node circle
     ///
     /// send circle back or alarm
-    /// send circle back or alarm
-    /// send circle back or alarm
     mysql_free_result(mysqlres);
     mysqlres = NULL;
-    if(!p1){
-        printf("\n %s Alarm:mysql have no device node about DTUID %ld",ctime(&LocalTime),dtuid);
-    }
+	return 0;
     /// send circle back or alarm
-    /// send circle back or alarm
-    /// send circle back or alarm
-    return p1;
 }
 
 
@@ -1083,39 +949,39 @@ char AddCharToMeterDataSecondaryLink(int ord,meterDataSecondary * p,uint8_t * t,
 
 char HostNodeUdpSend(listeningNode * tree){
 
-    uint32_t j = 0;
-    uint16_t i=0;
-    deviceNode * p =NULL;
-    modbusRegisterInfo * p1 = NULL;
-    uint8_t hostcode[8]={0};
-//	char * IPaddress=NULL;
-//	char message[]={"what's the fuck,where is my data???"};
-    if(tree -> headDevice)
-        p = tree -> headDevice;
-    else    return 0;
+	uint32_t j = 0;
+	uint16_t i=0;
+	deviceNode * p =NULL;
+	modbusRegisterInfo * p1 = NULL;
+	uint8_t hostcode[8]={0};
+	//	char * IPaddress=NULL;
+	//	char message[]={"what's the fuck,where is my data???"};
+	if(tree -> headDevice)
+		p = tree -> headDevice;
+	else    return 0;
 	while(p != NULL){
 		hostcode[0] = p -> deviceNumber;
 		hostcode[1] = 0x03;
 		hostcode[2] = p -> startRegister % 0x10000 / 0x100;
 		hostcode[3] = p -> startRegister % 0x100;
-        i=0;
-        if(p -> modbusRegisterInfoHead)
-            p1=p -> modbusRegisterInfoHead;
-        else    return 0;
-        while(p ->modbusRegisterInfoHead!= p1 -> next){
-            i+=p1->bytenum;
-            p1 = p1 ->next;
-        }
-        i/=2;
-        hostcode[4] = i % 0x10000 / 0x100;
-        hostcode[5] = i % 0x100;
+		i=0;
+		if(p -> modbusRegisterInfoHead)
+		    p1=p -> modbusRegisterInfoHead;
+		else    return 0;
+		while(p1){
+			i+=p1->bytenum;
+			p1 = p1 ->next;
+		}
+		i/=2;
+		hostcode[4] = i % 0x10000 / 0x100;
+		hostcode[5] = i % 0x100;
 		j=ModBusCRC16(hostcode,6);
 		hostcode[6] = j % 0x100;
 		hostcode[7] = j % 0x10000 / 0x100;
 //		printf("hostcode:%s\n",hostcode);
 		sendto(serv_sock,hostcode,sizeof(hostcode),0,(struct sockaddr*)&(tree->clientAddr),sizeof(tree -> clientAddr));
 		p = p -> next;
-		if(p == tree -> headDevice)
+		if(!p)
 			break;
 	}
 	return 1;
@@ -1160,7 +1026,7 @@ uint8_t FreeDeviceNodeCircle(deviceNode * p1){
 #ifdef DEBUG_outofmemory
 	printf("--deviceNode堆缓存计数%d\n",--memory_node_counter_DN);
 #endif
-	p1=p2
+	p1=p2;
         p2 = NULL;
     }
 
