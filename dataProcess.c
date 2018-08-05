@@ -27,16 +27,80 @@
 #include "dataSave.h"
 #include "modbusDriver.h"
 
+//根据不同数据类型序号，选择不同的处理函数
+uint32_t ushort_data_handler(uint32_t * i,struct mBDS mbds,uint32_t ord,void * p);
+uint32_t short_data_handler(uint32_t * i,struct mBDS mbds,uint32_t ord,void * p);
+uint32_t uint_data_handler(uint32_t * i,struct mBDS mbds,uint32_t ord,void * p);
+uint32_t int_data_handler(uint32_t *i,struct mBDS mbds,uint32_t ord,void * p);
+uint32_t ulong_data_handler(uint32_t *i,struct mBDS mbds,uint32_t ord,void * p);
+uint32_t long_data_handler(uint32_t *i,struct mBDS mbds,uint32_t ord,void * p);
+uint32_t float_data_handler(uint32_t *i,struct mBDS mbds,uint32_t ord,void * p);
+uint32_t double_data_handler(uint32_t *i,struct mBDS mbds,uint32_t ord,void * p);
+uint32_t char2_data_handler(uint32_t *i,struct mBDS mbds,uint32_t ord,void * p);
+uint32_t char4_data_handler(uint32_t *i,struct mBDS mbds,uint32_t ord,void * p);
+uint32_t char6_data_handler(uint32_t *i,struct mBDS mbds,uint32_t ord,void * p);
+uint32_t char8_data_handler(uint32_t *i,struct mBDS mbds,uint32_t ord,void * p);
+uint32_t char10_data_handler(uint32_t *i,struct mBDS mbds,uint32_t ord,void * p);
+uint32_t char12_data_handler(uint32_t *i,struct mBDS mbds,uint32_t ord,void * p);
+uint32_t char14_data_handler(uint32_t *i,struct mBDS mbds,uint32_t ord,void * p);
+uint32_t char16_data_handler(uint32_t *i,struct mBDS mbds,uint32_t ord,void * p);
+uint32_t char18_data_handler(uint32_t *i,struct mBDS mbds,uint32_t ord,void * p);
+uint32_t char20_data_handler(uint32_t *i,struct mBDS mbds,uint32_t ord,void * p);
+uint32_t timestamp_data_handler(uint32_t *i,struct mBDS mbds,uint32_t ord,void * p);
+
+uint32_t (*add_data_to_link[MODBUSREGISTERDATATYPECOUNTE]) (uint32_t * i,struct mBDS mbds,uint32_t ord,void * p) ={
+	ushort_data_handler,
+	short_data_handler,
+	uint_data_handler,
+	int_data_handler,
+	ulong_data_handler,
+	long_data_handler,
+	float_data_handler,
+	double_data_handler,
+	char2_data_handler,
+	char4_data_handler,
+	char6_data_handler,
+	char8_data_handler,
+	char10_data_handler,
+	char12_data_handler,
+	char14_data_handler,
+	char16_data_handler,
+	char18_data_handler,
+	char20_data_handler,
+	timestamp_data_handler
+};
+#define PRIMARYORDERCOUNT 5
+uint32_t add_long_to_primary_link_instantflow(meterDataPrimary*p,long long data);
+uint32_t add_double_to_primary_link_instantflow(meterDataPrimary*p,double data);
+uint32_t add_long_to_primary_link_totalflow(meterDataPrimary*p,long long data);
+uint32_t add_double_to_primary_link_totalflow(meterDataPrimary*p,double data);
+uint32_t add_long_to_primary_link_t(meterDataPrimary*p,long long data);
+uint32_t add_double_to_primary_link_t(meterDataPrimary*p,double data);
+uint32_t add_long_to_primary_link_p(meterDataPrimary*p,long long data);
+uint32_t add_double_to_primary_link_p(meterDataPrimary*p,double data);
+uint32_t add_long_to_primary_link_dp(meterDataPrimary*p,long long data);
+uint32_t add_double_to_primary_link_dp(meterDataPrimary*p,double data);
+uint32_t (*add_long_to_primary_link[PRIMARYORDERCOUNT])
+	(meterDataPrimary*p,long long modbusdataushort)={
+	add_long_to_primary_link_instantflow,
+	add_long_to_primary_link_totalflow,
+	add_long_to_primary_link_t,
+	add_long_to_primary_link_p,
+	add_long_to_primary_link_dp
+};
+uint32_t (*add_double_to_primary_link[PRIMARYORDERCOUNT])
+	(meterDataPrimary*p,double modbusdataushort)={
+	add_double_to_primary_link_instantflow,
+	add_double_to_primary_link_totalflow,
+	add_double_to_primary_link_t,
+	add_double_to_primary_link_p,
+	add_double_to_primary_link_dp
+};
+
 /*add node to meter data save node */
 /*add node to meter data save node */
 /*add node to meter data save node */
-char AddTimestampToMeterDataPrimarySecondaryNode(int ord,
-                                                 meterDataSecondary * p1,
-                                                 meterDataPrimary * p,
-                                                 uint8_t * t,
-                                                 uint8_t i);
 char AddLongToMeterDataPrimaryLink(int ord,meterDataPrimary * p,unsigned long int k);
-char AddDoubleToMeterDataPrimaryLink(int ord,meterDataPrimary * p,double k);
 char AddCharToMeterDataSecondaryLink(int ord,meterDataSecondary * p,uint8_t * t,uint8_t i);
 /*add node to meter data save node */
 /*add node to meter data save node */
@@ -150,7 +214,7 @@ void * ThreadDataProcess(void * arg){
     char secondarydatasign = 0;
 
     //temp data
-	int i=0;
+	uint32_t i=0;
 	int k=0;
 
     //meter data  node to save
@@ -340,6 +404,9 @@ void * ThreadDataProcess(void * arg){
 		i=0;
 		//仪表应答数据是有可能与登记数据长度不符的，因此遍历modbusRegisterInfoHead从头算一下
 		for(pmbri = dnp -> modbusRegisterInfoHead;pmbri;pmbri = pmbri -> next){
+		//TODO:如存在时间戳字段应该在此检出,以便下游数据存储时可以插入其中，另外下游处理时不应再存储时间戳字段----并未实现
+		//当前版本放弃了直接存储时间戳的处理，将时间戳的任务交给服务器,即数据存储时间为服务器时间
+		//因为与其放一个错位的时间戳，还不如用服务器的时间戳
 			i += pmbri -> bytenum;
 			if(i == mbds.bN)
 				break;
@@ -387,153 +454,15 @@ void * ThreadDataProcess(void * arg){
 			primarydatasign = 1;
 		else if(pmbri -> ord > ORDERPRIMARYNUMBER)
 			secondarydatasign = 1;
-            k=pmbri -> ord;
-            switch(pmbri -> datatype){
-			//ushort data handler
-			case MODBUSREGISTERDATATYPEUSHORT :
-                modbusdataushort=modbusdataushort+mbds.mBD[i]*0x100+mbds.mBD[i+1];
-                AddLongToMeterDataPrimaryLink(k,meterdataprimary,modbusdataushort);
-				i+=MODBUSDATAUSHORTSIZE;
-			break;
-
-			//short data handler
-			case MODBUSREGISTERDATATYPESHORT :
-                modbusdataushort=mbds.mBD[i]*0x100+mbds.mBD[i+1];
-                AddLongToMeterDataPrimaryLink(k,meterdataprimary,*((short *)(&modbusdataushort)));
-                i+=MODBUSDATAUSHORTSIZE;
-			break;
-			case MODBUSREGISTERDATATYPEUINT:
-                modbusdatauint=mbds.mBD[i]*0x1000000+mbds.mBD[i+1]*0x10000+mbds.mBD[i+2]*0x100+mbds.mBD[i+3];
-                AddLongToMeterDataPrimaryLink(k,meterdataprimary,modbusdatauint);
-                i+=MODBUSDATAUINTSIZE;
-			break;
-			case MODBUSREGISTERDATATYPEINT:
-                modbusdatauint=mbds.mBD[i]*0x1000000+mbds.mBD[i+1]*0x10000+mbds.mBD[i+2]*0x100+mbds.mBD[i+3];
-                AddLongToMeterDataPrimaryLink(k,meterdataprimary,*((int *)(&modbusdatauint)));
-                i+=MODBUSDATAINTSIZE;
-			break;
-			case MODBUSREGISTERDATATYPEFLOAT:
-                modbusdatauint=mbds.mBD[i]*0x1000000+mbds.mBD[i+1]*0x10000+mbds.mBD[i+2]*0x100+mbds.mBD[i+3];
-                modbusdatafloat=*((float *)(&modbusdatauint));
-                AddDoubleToMeterDataPrimaryLink(k,meterdataprimary,(double)modbusdatafloat);
-				i+=MODBUSDATAFLOATSIZE;
-			break;
-			case MODBUSREGISTERDATATYPEDOUBLE:
-                modbusdataulong=
-                        mbds.mBD[i] * 0x100000000000000+
-                        mbds.mBD[i+1]*0x1000000000000+
-                        mbds.mBD[i+2]*0x10000000000+
-                        mbds.mBD[i+3]*0x100000000+
-                        mbds.mBD[i+4]*0x1000000+
-                        mbds.mBD[i+5]*0x10000+
-                        mbds.mBD[i+6]*0x100+
-                        mbds.mBD[i+7];
-                modbusdatadouble=*((double *)(&modbusdataulong));
-                AddDoubleToMeterDataPrimaryLink(k,meterdataprimary,modbusdatadouble);
-				i+=MODBUSDATADOUBLESIZE;
-			break;
-            case MODBUSREGISTERDATATYPETIMESTAMP:
-                AddTimestampToMeterDataPrimarySecondaryNode(k,
-                                                            meterdatasecondary,
-                                                            meterdataprimary,
-                                                            &(mbds.mBD[i]),
-                                                            pmbri->bytenum);
-                i+= pmbri->bytenum;
-            break;
-
-
-			case MODBUSREGISTERDATATYPEUCHAR2:
-                memcpy(modbusdatabuffer,&(mbds.mBD[i]),MODBUSDATAUCHAR2);
-                AddCharToMeterDataSecondaryLink(k,meterdatasecondary,modbusdatabuffer,MODBUSDATAUCHAR2);
-				i+=MODBUSDATAUCHAR2;
-			break;
-
-			//
-			//
-			//char4-char10 could be timestamp so we should check it
-			case MODBUSREGISTERDATATYPEUCHAR4:
-                memcpy(modbusdatabuffer,&(mbds.mBD[i]),MODBUSDATAUCHAR4);
-                AddCharToMeterDataSecondaryLink(k,meterdatasecondary,modbusdatabuffer,MODBUSDATAUCHAR4);
-                AddTimestampToMeterDataPrimarySecondaryNode(pmbri -> ord,
-                                                            meterdatasecondary,
-                                                            meterdataprimary,
-                                                            modbusdatabuffer,
-                                                            MODBUSDATAUCHAR4);
-				i+=MODBUSDATAUCHAR4;
-			break;
-
-			case MODBUSREGISTERDATATYPEUCHAR6:
-                memcpy(modbusdatabuffer,&(mbds.mBD[i]),MODBUSDATAUCHAR6);
-                AddCharToMeterDataSecondaryLink(k,meterdatasecondary,modbusdatabuffer,MODBUSDATAUCHAR6);
-                AddTimestampToMeterDataPrimarySecondaryNode(pmbri -> ord,
-                                                            meterdatasecondary,
-                                                            meterdataprimary,
-                                                            modbusdatabuffer,
-                                                            MODBUSDATAUCHAR6);
-				i+=MODBUSDATAUCHAR6;
-			break;
-
-            case MODBUSREGISTERDATATYPEUCHAR8:
-                memcpy(modbusdatabuffer,&(mbds.mBD[i]),MODBUSDATAUCHAR8);
-                AddCharToMeterDataSecondaryLink(k,meterdatasecondary,modbusdatabuffer,MODBUSDATAUCHAR8);
-                AddTimestampToMeterDataPrimarySecondaryNode(pmbri -> ord,
-                                                            meterdatasecondary,
-                                                            meterdataprimary,
-                                                            modbusdatabuffer,
-                                                            MODBUSDATAUCHAR8);
-                i+=MODBUSDATAUCHAR8;
-            break;
-
-            case MODBUSREGISTERDATATYPEUCHAR10:
-                memcpy(modbusdatabuffer,&(mbds.mBD[i]),MODBUSDATAUCHAR10);
-                AddCharToMeterDataSecondaryLink(k,meterdatasecondary,modbusdatabuffer,MODBUSDATAUCHAR10);
-                AddTimestampToMeterDataPrimarySecondaryNode(pmbri -> ord,
-                                                            meterdatasecondary,
-                                                            meterdataprimary,
-                                                            modbusdatabuffer,
-                                                            MODBUSDATAUCHAR10);
-                i+=MODBUSDATAUCHAR10;
-            break;
-			//char4-char10 could be timestamp so we should check it
-			//
-            //
-            case MODBUSREGISTERDATATYPEUCHAR12:
-                memcpy(modbusdatabuffer,&(mbds.mBD[i]),MODBUSDATAUCHAR12);
-                AddCharToMeterDataSecondaryLink(k,meterdatasecondary,modbusdatabuffer,MODBUSDATAUCHAR12);
-                i+=MODBUSDATAUCHAR12;
-            break;
-
-            case MODBUSREGISTERDATATYPEUCHAR14:
-                memcpy(modbusdatabuffer,&(mbds.mBD[i]),MODBUSDATAUCHAR14);
-                AddCharToMeterDataSecondaryLink(k,meterdatasecondary,modbusdatabuffer,MODBUSDATAUCHAR14);
-                i+=MODBUSDATAUCHAR14;
-            break;
-
-            case MODBUSREGISTERDATATYPEUCHAR16:
-                memcpy(modbusdatabuffer,&(mbds.mBD[i]),MODBUSDATAUCHAR16);
-                AddCharToMeterDataSecondaryLink(k,meterdatasecondary,modbusdatabuffer,MODBUSDATAUCHAR16);
-                i+=MODBUSDATAUCHAR16;
-            break;
-
-            case MODBUSREGISTERDATATYPEUCHAR18:
-                memcpy(modbusdatabuffer,&(mbds.mBD[i]),MODBUSDATAUCHAR18);
-                AddCharToMeterDataSecondaryLink(k,meterdatasecondary,modbusdatabuffer,MODBUSDATAUCHAR18);
-                i+=MODBUSDATAUCHAR18;
-            break;
-
-            case MODBUSREGISTERDATATYPEUCHAR20:
-                memcpy(modbusdatabuffer,&(mbds.mBD[i]),MODBUSDATAUCHAR20);
-                AddCharToMeterDataSecondaryLink(k,meterdatasecondary,modbusdatabuffer,MODBUSDATAUCHAR20);
-                i+=MODBUSDATAUCHAR20;
-            break;
-
-			default:
-///Alarm3:this need to control mysql-> alarm table
-                printf("\nunknown data type");
-			break;
-			}
+		k=pmbri -> ord;
+		printf("k=%d,i=%d,pmbri->datatype=%d\n",k,i,pmbri->datatype);
+		if((pmbri -> datatype < MODBUSREGISTERDATATYPECOUNTE)&&(pmbri -> datatype > 0))
+			(*add_data_to_link[pmbri -> datatype - 1])(&i,mbds,k,(void *)meterdataprimary);
+		//时间戳字段被跳过
+		if(pmbri -> datatype == MODBUSREGISTERDATATYPETIMESTAMP)
+                	i+= pmbri->bytenum;
 			pmbri = pmbri -> next;
-        }while((i<mbds.bN)&&(dnp -> modbusRegisterInfoHead != pmbri));
+        }while((i<mbds.bN)&&(pmbri));
 //2.5.2 handle it one by one
 //
 //2.5.3 send meterdata to it's link
@@ -576,6 +505,274 @@ data_process_continue:
 //2.5 handle client data,all bad situation had removed,i can sure this is client message,
 	return 0;
 }
+
+uint32_t add_long_to_primary_link_instantflow(meterDataPrimary*p,long long data){
+        p -> instantFlow = (float)data;
+	return 0;
+}
+uint32_t add_double_to_primary_link_instantflow(meterDataPrimary*p,double data){
+        p -> instantFlow = (float)data;
+	return 0;
+}
+uint32_t add_long_to_primary_link_totalflow(meterDataPrimary*p,long long data){
+        p -> totalFlow = (uint64_t)data;
+	return 0;
+}
+uint32_t add_double_to_primary_link_totalflow(meterDataPrimary*p,double data){
+        p -> totalFlow = (uint64_t)data;
+	return 0;
+}
+uint32_t add_long_to_primary_link_t(meterDataPrimary*p,long long data){
+        p -> T= (float)data;
+	return 0;
+}
+uint32_t add_double_to_primary_link_t(meterDataPrimary*p,double data){
+        p -> T= (float)data;
+	return 0;
+}
+uint32_t add_long_to_primary_link_p(meterDataPrimary*p,long long data){
+        p -> P= (float)data;
+	return 0;
+}
+uint32_t add_double_to_primary_link_p(meterDataPrimary*p,double data){
+        p -> P= (float)data;
+	return 0;
+}
+uint32_t add_long_to_primary_link_dp(meterDataPrimary*p,long long data){
+        p -> DP= (float)data;
+	return 0;
+}
+uint32_t add_double_to_primary_link_dp(meterDataPrimary*p,double data){
+        p -> DP= (float)data;
+	return 0;
+}
+
+uint32_t ushort_data_handler(uint32_t * i,struct mBDS mbds,uint32_t ord,void * p){
+	uint16_t modbusdataushort = mbds.mBD[*i] * 0x100 + mbds.mBD[(*i)+1];
+	if(ord<PRIMARYORDERCOUNT)
+		(*add_long_to_primary_link[ord-1])((meterDataPrimary*)p,(long long)modbusdataushort);
+	(*i)+=MODBUSDATAUSHORTSIZE;
+	return 0;
+}
+uint32_t short_data_handler(uint32_t * i,struct mBDS mbds,uint32_t ord,void * p){
+	uint16_t modbusdataushort = mbds.mBD[*i] * 0x100 + mbds.mBD[(*i)+1];
+	if(ord<PRIMARYORDERCOUNT)
+		(*add_long_to_primary_link[ord-1])((meterDataPrimary*)p,*((short *)(&modbusdataushort)));
+	(*i)+=MODBUSDATAUSHORTSIZE;
+	return 0;
+}
+uint32_t uint_data_handler(uint32_t * i,struct mBDS mbds,uint32_t ord,void * p){
+	uint32_t modbusdatauint = mbds.mBD[*i]*0x1000000+mbds.mBD[(*i)+1]*0x10000+mbds.mBD[(*i)+2]*0x100+mbds.mBD[(*i)+3];
+	if(ord<PRIMARYORDERCOUNT)
+		(*add_long_to_primary_link[ord-1])((meterDataPrimary*)p,modbusdatauint);
+	(*i)+=MODBUSDATAUINTSIZE;
+	return 0;
+}
+uint32_t int_data_handler(uint32_t *i,struct mBDS mbds,uint32_t ord,void * p){
+	uint32_t modbusdatauint=mbds.mBD[*i]*0x1000000+mbds.mBD[*i+1]*0x10000+mbds.mBD[*i+2]*0x100+mbds.mBD[*i+3];
+	if(ord<PRIMARYORDERCOUNT)
+		(*add_long_to_primary_link[ord-1])((meterDataPrimary*)p,*((int *)(&modbusdatauint)));
+	(*i)+=MODBUSDATAINTSIZE;
+	return 0;
+}
+uint32_t ulong_data_handler(uint32_t *i,struct mBDS mbds,uint32_t ord,void * p){
+	uint64_t modbusdataulong=
+		mbds.mBD[*i] * 0x100000000000000+
+		mbds.mBD[*i+1]*0x1000000000000+
+		mbds.mBD[*i+2]*0x10000000000+
+		mbds.mBD[*i+3]*0x100000000+
+		mbds.mBD[*i+4]*0x1000000+
+		mbds.mBD[*i+5]*0x10000+
+		mbds.mBD[*i+6]*0x100+
+		mbds.mBD[*i+7];
+	if(ord<PRIMARYORDERCOUNT)
+		(*add_long_to_primary_link[ord-1])((meterDataPrimary*)p,modbusdataulong);
+	(*i)+=MODBUSDATAULONGSIZE;
+	return 0;
+}
+uint32_t long_data_handler(uint32_t *i,struct mBDS mbds,uint32_t ord,void * p){
+	uint64_t modbusdataulong=
+		mbds.mBD[*i] * 0x100000000000000+
+		mbds.mBD[*i+1]*0x1000000000000+
+		mbds.mBD[*i+2]*0x10000000000+
+		mbds.mBD[*i+3]*0x100000000+
+		mbds.mBD[*i+4]*0x1000000+
+		mbds.mBD[*i+5]*0x10000+
+		mbds.mBD[*i+6]*0x100+
+		mbds.mBD[*i+7];
+	if(ord<PRIMARYORDERCOUNT)
+		(*add_long_to_primary_link[ord-1])((meterDataPrimary*)p,(long long)modbusdataulong);
+	(*i)+=MODBUSDATALONGSIZE;
+	return 0;
+}
+uint32_t float_data_handler(uint32_t *i,struct mBDS mbds,uint32_t ord,void * p){
+	uint32_t modbusdatauint=mbds.mBD[(*i)]*0x1000000+mbds.mBD[(*i)+1]*0x10000+mbds.mBD[(*i)+2]*0x100+mbds.mBD[(*i)+3];
+	printf("处理float数据，ord=%d,modbusdatauint=%lf",ord,(double)(*((float *)(&modbusdatauint))));
+	if(ord<PRIMARYORDERCOUNT)
+		(*add_double_to_primary_link[ord-1])((meterDataPrimary*)p,(double)(*((float *)(&modbusdatauint))));
+	(*i)+=MODBUSDATAFLOATSIZE;
+	return 0;
+}
+	
+uint32_t double_data_handler(uint32_t *i,struct mBDS mbds,uint32_t ord,void * p){
+	uint64_t modbusdataulong=
+		mbds.mBD[*i] * 0x100000000000000+
+		mbds.mBD[*i+1]*0x1000000000000+
+		mbds.mBD[*i+2]*0x10000000000+
+		mbds.mBD[*i+3]*0x100000000+
+		mbds.mBD[*i+4]*0x1000000+
+		mbds.mBD[*i+5]*0x10000+
+		mbds.mBD[*i+6]*0x100+
+		mbds.mBD[*i+7];
+	if(ord<PRIMARYORDERCOUNT)
+		(*add_double_to_primary_link[ord-1])((meterDataPrimary*)p,*((double *)(&modbusdataulong)));
+	(*i)+=MODBUSDATADOUBLESIZE;
+	return 0;
+}
+
+uint32_t char2_data_handler(uint32_t *i,struct mBDS mbds,uint32_t ord,void * p){
+	uint8_t modbusdatabuffer[MODBUSDATAUCHAR2];
+	memcpy(modbusdatabuffer,&(mbds.mBD[*i]),MODBUSDATAUCHAR2);
+	AddCharToMeterDataSecondaryLink(ord,(meterDataSecondary*)p,modbusdatabuffer,MODBUSDATAUCHAR2);
+	(*i)+=MODBUSDATAUCHAR2;
+	return 0;
+}
+uint32_t char4_data_handler(uint32_t *i,struct mBDS mbds,uint32_t ord,void * p){
+	uint8_t modbusdatabuffer[MODBUSDATAUCHAR4];
+	memcpy(modbusdatabuffer,&(mbds.mBD[*i]),MODBUSDATAUCHAR4);
+	AddCharToMeterDataSecondaryLink(ord,(meterDataSecondary*)p,modbusdatabuffer,MODBUSDATAUCHAR4);
+	(*i)+=MODBUSDATAUCHAR4;
+	return 0;
+}
+uint32_t char6_data_handler(uint32_t *i,struct mBDS mbds,uint32_t ord,void * p){
+	uint8_t modbusdatabuffer[MODBUSDATAUCHAR6];
+	memcpy(modbusdatabuffer,&(mbds.mBD[*i]),MODBUSDATAUCHAR6);
+	AddCharToMeterDataSecondaryLink(ord,(meterDataSecondary*)p,modbusdatabuffer,MODBUSDATAUCHAR6);
+	(*i)+=MODBUSDATAUCHAR6;
+	return 0;
+}
+uint32_t char8_data_handler(uint32_t *i,struct mBDS mbds,uint32_t ord,void * p){
+	uint8_t modbusdatabuffer[MODBUSDATAUCHAR8];
+	memcpy(modbusdatabuffer,&(mbds.mBD[*i]),MODBUSDATAUCHAR8);
+	AddCharToMeterDataSecondaryLink(ord,(meterDataSecondary*)p,modbusdatabuffer,MODBUSDATAUCHAR8);
+	(*i)+=MODBUSDATAUCHAR8;
+	return 0;
+}
+uint32_t char10_data_handler(uint32_t *i,struct mBDS mbds,uint32_t ord,void * p){
+	uint8_t modbusdatabuffer[MODBUSDATAUCHAR10];
+	memcpy(modbusdatabuffer,&(mbds.mBD[*i]),MODBUSDATAUCHAR10);
+	AddCharToMeterDataSecondaryLink(ord,(meterDataSecondary*)p,modbusdatabuffer,MODBUSDATAUCHAR10);
+	(*i)+=MODBUSDATAUCHAR10;
+	return 0;
+}
+uint32_t char12_data_handler(uint32_t *i,struct mBDS mbds,uint32_t ord,void * p){
+	uint8_t modbusdatabuffer[MODBUSDATAUCHAR12];
+	memcpy(modbusdatabuffer,&(mbds.mBD[*i]),MODBUSDATAUCHAR12);
+	AddCharToMeterDataSecondaryLink(ord,(meterDataSecondary*)p,modbusdatabuffer,MODBUSDATAUCHAR12);
+	(*i)+=MODBUSDATAUCHAR12;
+	return 0;
+}
+uint32_t char14_data_handler(uint32_t *i,struct mBDS mbds,uint32_t ord,void * p){
+	uint8_t modbusdatabuffer[MODBUSDATAUCHAR14];
+	memcpy(modbusdatabuffer,&(mbds.mBD[*i]),MODBUSDATAUCHAR14);
+	AddCharToMeterDataSecondaryLink(ord,(meterDataSecondary*)p,modbusdatabuffer,MODBUSDATAUCHAR14);
+	(*i)+=MODBUSDATAUCHAR14;
+	return 0;
+}
+uint32_t char16_data_handler(uint32_t *i,struct mBDS mbds,uint32_t ord,void * p){
+	uint8_t modbusdatabuffer[MODBUSDATAUCHAR16];
+	memcpy(modbusdatabuffer,&(mbds.mBD[*i]),MODBUSDATAUCHAR16);
+	AddCharToMeterDataSecondaryLink(ord,(meterDataSecondary*)p,modbusdatabuffer,MODBUSDATAUCHAR16);
+	(*i)+=MODBUSDATAUCHAR16;
+	return 0;
+}
+uint32_t char18_data_handler(uint32_t *i,struct mBDS mbds,uint32_t ord,void * p){
+	uint8_t modbusdatabuffer[MODBUSDATAUCHAR18];
+	memcpy(modbusdatabuffer,&(mbds.mBD[*i]),MODBUSDATAUCHAR18);
+	AddCharToMeterDataSecondaryLink(ord,(meterDataSecondary*)p,modbusdatabuffer,MODBUSDATAUCHAR18);
+	(*i)+=MODBUSDATAUCHAR18;
+	return 0;
+}
+uint32_t char20_data_handler(uint32_t *i,struct mBDS mbds,uint32_t ord,void * p){
+	uint8_t modbusdatabuffer[MODBUSDATAUCHAR20];
+	memcpy(modbusdatabuffer,&(mbds.mBD[*i]),MODBUSDATAUCHAR20);
+	AddCharToMeterDataSecondaryLink(ord,(meterDataSecondary*)p,modbusdatabuffer,MODBUSDATAUCHAR20);
+	(*i)+=MODBUSDATAUCHAR20;
+	return 0;
+}
+//时间戳并不会被真实处理，此处仅为了防止出现bug
+uint32_t timestamp_data_handler(uint32_t *i,struct mBDS mbds,uint32_t ord,void * p){
+}
+/*return:
+ * 1	ok;
+ * 0	mission failed
+ * */
+char AddCharToMeterDataSecondaryLink(int ord,meterDataSecondary * p,uint8_t * t,uint8_t i){
+
+    switch(ord){
+    case ORDER20:
+        if(i>20) return 0;
+        memcpy(p -> order20,t,i);
+        break;
+    case ORDER7:
+        if(i>20) return 0;
+        memcpy(p -> order7,t,i);
+        break;
+    case ORDER8:
+        if(i>20) return 0;
+        memcpy(p -> order8,t,i);
+        break;
+    case ORDER9:
+        if(i>20) return 0;
+        memcpy(p -> order9,t,i);
+        break;
+    case ORDER10:
+        if(i>20) return 0;
+        memcpy(p -> order10,t,i);
+        break;
+    case ORDER11:
+        if(i>20) return 0;
+        memcpy(p -> order11,t,i);
+        break;
+    case ORDER12:
+        if(i>20) return 0;
+        memcpy(p -> order12,t,i);
+        break;
+    case ORDER13:
+        if(i>20) return 0;
+        memcpy(p -> order13,t,i);
+        break;
+    case ORDER14:
+        if(i>20) return 0;
+        memcpy(p -> order14,t,i);
+        break;
+    case ORDER15:
+        if(i>20) return 0;
+        memcpy(p -> order15,t,i);
+        break;
+    case ORDER16:
+        if(i>20) return 0;
+        memcpy(p -> order16,t,i);
+        break;
+    case ORDER17:
+        if(i>20) return 0;
+        memcpy(p -> order17,t,i);
+        break;
+    case ORDER18:
+        if(i>20) return 0;
+        memcpy(p -> order18,t,i);
+        break;
+    case ORDER19:
+        if(i>20) return 0;
+        memcpy(p -> order19,t,i);
+        break;
+    default:
+        return 0;
+        break;
+    }
+    return 1;
+}
+
 char SplitModBusData(mBDS *mbds,uint8_t *mbst,char n){
     mbds -> addr = mbst[0];
     mbds -> fC = mbst[1];
@@ -696,7 +893,7 @@ int CreateModBusRegisterInfoCircleFromMysql(deviceNode * p){
 	//首先，MBRI链中已有数据要剔除,然后，还要更新此阶位下已有数据
 	i=atoi(mysqlrow[0]);
 	for(mp1 = p -> modbusRegisterInfoHead;mp1;mp1 = mp1 -> next)
-		if(i < mp1 -> order)
+		if(i > mp1 -> ord)
 			lastmp1=mp1;
 		else if(i == mp1 -> ord){
 			mp1 -> addr= atoi(mysqlrow[1]);
@@ -725,9 +922,19 @@ int CreateModBusRegisterInfoCircleFromMysql(deviceNode * p){
 	if(! p -> modbusRegisterInfoHead){
 		p -> modbusRegisterInfoHead = mp2;
 	}else{
-		if(lastmp1 -> next)
+		//排序存放
+		//lastmp1和next都有，找到插入位置
+		//lastmp1有next无，插入在末尾
+		//lastmp1无next无，head有，则mp2在head先，插头
+		if(lastmp1&&lastmp1 -> next)
 			mp2 -> next = lastmp1 -> next;
-		lastmp1 -> next = mp2;
+		else if(lastmp1)
+			lastmp1 -> next = mp2;
+		else{ 
+			lastmp1 = p -> modbusRegisterInfoHead -> next;
+			p -> modbusRegisterInfoHead = mp2;
+			p -> modbusRegisterInfoHead -> next = lastmp1; 
+		}
 	}
 	mp2 = NULL;
     }
@@ -822,138 +1029,6 @@ int CreateDeviceNodeCircleFromMysql(listeningNode * p){
     /// send circle back or alarm
 }
 
-
-char AddTimestampToMeterDataPrimarySecondaryNode(int ord, meterDataSecondary * p1,
-                                                 meterDataPrimary * p, uint8_t *t, uint8_t i){
-    if(ord == ORDERTIMESTAMP){
-        if(i>10) return 0;
-        memcpy(p -> timestamp,t,i);
-        memcpy(p1 -> timestamp,t,i);
-    }
-}
-/*return:
- * 1	ok;
- * 0	mission failed
- * */
-char AddLongToMeterDataPrimaryLink(int ord,meterDataPrimary * p,unsigned long int k){
-    switch(ord){
-    case ORDERINSTANTFLOW :
-        p -> instantFlow = (float)k;
-        break;
-    case ORDERTOTALFLOW :
-        p -> totalFlow = (unsigned long int)k;
-        break;
-    case ORDERT:
-        p -> T= (float)k;
-        break;
-    case ORDERP:
-        p -> P= (float)k;
-        break;
-    case ORDERDP:
-        p -> DP= (float)k;
-        break;
-    default:
-        return 0;
-        break;
-    }
-    return 1;
-}
-/*return:
- * 1	ok;
- * 0	mission failed
- * */
-char AddDoubleToMeterDataPrimaryLink(int ord,meterDataPrimary * p,double k){
-    switch(ord){
-    case ORDERINSTANTFLOW :
-        p -> instantFlow = (float)k;
-        break;
-    case ORDERTOTALFLOW :
-        p -> totalFlow = (long int)k;
-        break;
-    case ORDERT:
-        p -> T= (float)k;
-        break;
-    case ORDERP:
-        p -> P= (float)k;
-        break;
-    case ORDERDP:
-        p -> DP= (float)k;
-        break;
-    default:
-        return 0;
-        break;
-    }
-    return 1;
-}
-/*return:
- * 1	ok;
- * 0	mission failed
- * */
-char AddCharToMeterDataSecondaryLink(int ord,meterDataSecondary * p,uint8_t * t,uint8_t i){
-
-    switch(ord){
-    case ORDER20:
-        if(i>20) return 0;
-        memcpy(p -> order20,t,i);
-        break;
-    case ORDER7:
-        if(i>20) return 0;
-        memcpy(p -> order7,t,i);
-        break;
-    case ORDER8:
-        if(i>20) return 0;
-        memcpy(p -> order8,t,i);
-        break;
-    case ORDER9:
-        if(i>20) return 0;
-        memcpy(p -> order9,t,i);
-        break;
-    case ORDER10:
-        if(i>20) return 0;
-        memcpy(p -> order10,t,i);
-        break;
-    case ORDER11:
-        if(i>20) return 0;
-        memcpy(p -> order11,t,i);
-        break;
-    case ORDER12:
-        if(i>20) return 0;
-        memcpy(p -> order12,t,i);
-        break;
-    case ORDER13:
-        if(i>20) return 0;
-        memcpy(p -> order13,t,i);
-        break;
-    case ORDER14:
-        if(i>20) return 0;
-        memcpy(p -> order14,t,i);
-        break;
-    case ORDER15:
-        if(i>20) return 0;
-        memcpy(p -> order15,t,i);
-        break;
-    case ORDER16:
-        if(i>20) return 0;
-        memcpy(p -> order16,t,i);
-        break;
-    case ORDER17:
-        if(i>20) return 0;
-        memcpy(p -> order17,t,i);
-        break;
-    case ORDER18:
-        if(i>20) return 0;
-        memcpy(p -> order18,t,i);
-        break;
-    case ORDER19:
-        if(i>20) return 0;
-        memcpy(p -> order19,t,i);
-        break;
-    default:
-        return 0;
-        break;
-    }
-    return 1;
-}
 
 
 char HostNodeUdpSend(listeningNode * tree){
