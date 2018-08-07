@@ -1,8 +1,20 @@
 #ifndef _MODBUSDRIVER_H_
 #define _MODBUSDRIVER_H_
 
-//测试内存溢出的问题
+//网络数据包缓存链表计数
+extern int UdpMsgNumber;
+//缓存大小没5分钟更新一次，在LNManager线程
+extern int stable_buffer_size;
+//稳定缓存限制300M,稳定缓存达到上限后将不会再建立新连接，但是新增协议依旧可以申请缓存
+extern int stable_buffer_limit_size;
+extern int dynamic_buffer_size;
+//动态缓存限制180M,动态缓存仅会限制udpMsg缓存大小，dataSave不受限制
+extern int dynamic_buffer_limit_size;
+
+
 #define DEBUG_outofmemory
+#ifdef DEBUG_outofmemory
+//测试内存溢出的问题
 //#define DEBUG
 extern int memory_node_counter_udpmsg;
 extern int memory_node_counter_datasave;
@@ -13,15 +25,15 @@ extern int memory_node_counter_MBRI;
 //deviceNode
 extern int memory_node_counter_DN;
 //测试内存溢出的问题
-
+#endif
 
 
 #define BUFF_SIZE 100
 
 #define MODBUSDATAUNITSIZEMAX 480
 
-//宕机30分钟删除链接
-#define MAXDUMPTIME 1800//seconds
+//宕机20小时删除链接
+#define MAXDUMPTIME 72000//seconds
 //超出此次数再次处理包
 #define MMAXHEARTBEATNUMBER 600//
 //超出此次数忽略包
@@ -147,10 +159,10 @@ typedef struct listeningNode {
 
 
 typedef struct modbusRegisterInfo{
-	int ord;
-	int addr;
-	int bytenum;
-	int datatype;
+	uint32_t ord;
+	uint32_t addr;
+	uint32_t bytenum;
+	uint32_t datatype;
 	struct modbusRegisterInfo * next;
 }modbusRegisterInfo;
 
@@ -226,11 +238,6 @@ extern meterDataPrimary * meterDataPrimaryHead;
 extern meterDataSecondary * meterDataSecondaryHead;
 //触发处理线程检查RBT的心跳和离线
 extern int RBTListeningNodeNumber;
-
-//save the number of current MeterDataToSave
-extern int MeterDataNumber;
-//网络数据包缓存链表计数
-extern int UdpMsgNumber;
 
 //
 //mysql descripter

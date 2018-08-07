@@ -27,6 +27,15 @@
 #include "dataSave.h"
 #include "modbusDriver.h"
 
+//LNode计数
+uint32_t LNode_count=0;
+//DNode计数
+uint32_t DNode_count=0;
+//MBRI计数
+uint32_t MBRI_count=0;
+//数据保存缓存链表计数
+uint32_t data_save_primary_count=0;
+uint32_t data_save_secondary_count=0;
 //根据不同数据类型序号，选择不同的处理函数
 uint32_t ushort_data_handler(uint32_t * i,struct mBDS mbds,uint32_t ord,void * p);
 uint32_t short_data_handler(uint32_t * i,struct mBDS mbds,uint32_t ord,void * p);
@@ -199,15 +208,6 @@ void * ThreadDataProcess(void * arg){
     //temp for meterid %d
     uint32_t meterid=0;
     //temp place when sent modbusdata to meterdata to save
-    uint8_t modbusdatabuffer[MODBUSDATAUNITSIZEMAX]= {0};
-
-    //used to make modbus data back to it's original
-    unsigned short modbusdataushort=0;
-    unsigned int modbusdatauint=0;
-    unsigned long long modbusdataulong=0;
-    float modbusdatafloat = 0;
-    double modbusdatadouble= 0;
-    //used to make modbus data back to it's original
 
     //signature for data belong
     char primarydatasign = 0;
@@ -239,7 +239,7 @@ void * ThreadDataProcess(void * arg){
 /*data is incorrec thung up thread and turn back to while  */
 		pthread_mutex_lock(&mtx);
 		////imodbus is for length of modbus data
-		while(!(p = UdpMsgNodeWaitingForHandle())){
+		while((p = udpMsgHead) == NULL){
 #ifdef DEBUG
 			printf("数据处理线程第————%d————次睡眠,时间-%s",++sleep_counter,get_str_time_now());
 #endif
@@ -250,6 +250,7 @@ void * ThreadDataProcess(void * arg){
 			//if thread resume back to while(1)
 			//continue;
 		}
+		udpMsgHead = udpMsgHead -> next;
 		//if udp message is bigger than BUFF_SIZE?maybe this is no need to do
 		//unlock thread
 		pthread_mutex_unlock(&mtx);
@@ -268,11 +269,17 @@ void * ThreadDataProcess(void * arg){
 //2.1 if udpmsg is not in RBT listeningNode,insert it
 		if((p1=RBTSearch(&listeningNodeRoot,dtuid))==NULL){
 			//create a new listeningNode
+			//此处还要加入连接数超过限制，将会停止新建连接
+			//怎呢弄好呢。。。如果一个连接，过一个小时发一个数据，然后超时时间是50分钟，那么这个连接肯定会产生不断新建的情况，如何是好？
+			if(stable_buffer_size > stable_buffer_limit_size){
+				goto data_process_continue;
+			}
 			if((p1 = (listeningNode*)malloc(sizeof(listeningNode))) == NULL){
 				printf("listeningNode out of memory");
 				//if thread resume back to while(1)
 				goto data_process_continue;
 			}
+			LNode_count++;
 #ifdef DEBUG_outofmemory
 			//测试内存溢出的问题
 			printf("+++++++++++++++LNode堆缓存计数%d--没有查找到LNode,创建的DTUID为：%d\n",++memory_node_counter_LNode,dtuid);
@@ -444,24 +451,20 @@ void * ThreadDataProcess(void * arg){
 //
 //2.5.2 handle it one by one
         do{
-            modbusdatauint=0;
-            modbusdataulong=0;
-            modbusdataushort=0;
-            modbusdatafloat=0;
-            modbusdatadouble=0;
-		memset(modbusdatabuffer,0,sizeof(modbusdatabuffer));
 		if(pmbri -> ord <= ORDERPRIMARYNUMBER)
 			primarydatasign = 1;
 		else if(pmbri -> ord > ORDERPRIMARYNUMBER)
 			secondarydatasign = 1;
 		k=pmbri -> ord;
+#ifdef DEBUG
 		printf("k=%d,i=%d,pmbri->datatype=%d\n",k,i,pmbri->datatype);
-		if((pmbri -> datatype < MODBUSREGISTERDATATYPECOUNTE)&&(pmbri -> datatype > 0))
+#endif
+		if((pmbri -> datatype < MODBUSREGISTERDATATYPECOUNTE))
 			(*add_data_to_link[pmbri -> datatype - 1])(&i,mbds,k,(void *)meterdataprimary);
 		//时间戳字段被跳过
 		if(pmbri -> datatype == MODBUSREGISTERDATATYPETIMESTAMP)
                 	i+= pmbri->bytenum;
-			pmbri = pmbri -> next;
+		pmbri = pmbri -> next;
         }while((i<mbds.bN)&&(pmbri));
 //2.5.2 handle it one by one
 //
@@ -474,15 +477,15 @@ void * ThreadDataProcess(void * arg){
             meterdataprimary -> next= meterDataPrimaryHead;
             meterDataPrimaryHead = meterdataprimary;
             meterdataprimary= NULL;
-		MeterDataNumber++;
+		data_save_primary_count++;
         }
         if(secondarydatasign){
             meterdatasecondary -> next= meterDataSecondaryHead;
             meterDataSecondaryHead = meterdatasecondary;
             meterdatasecondary=NULL;
-		MeterDataNumber++;
+		data_save_secondary_count++;
         }
-	if(MeterDataNumber>10){
+	if(data_save_secondary_count+data_save_primary_count>10){
 		pthread_cond_signal(&condDataSave);
 	}
         pthread_mutex_unlock(&data_save_mtx);
@@ -497,6 +500,7 @@ data_process_continue:
 #endif
 		free(p);
 		p=NULL;
+		UdpMsgNumber--;
 	}
 //2.5.3 send meterdata to it's link
 //
@@ -607,7 +611,9 @@ uint32_t long_data_handler(uint32_t *i,struct mBDS mbds,uint32_t ord,void * p){
 }
 uint32_t float_data_handler(uint32_t *i,struct mBDS mbds,uint32_t ord,void * p){
 	uint32_t modbusdatauint=mbds.mBD[(*i)]*0x1000000+mbds.mBD[(*i)+1]*0x10000+mbds.mBD[(*i)+2]*0x100+mbds.mBD[(*i)+3];
+#ifdef DEBUG
 	printf("处理float数据，ord=%d,modbusdatauint=%lf",ord,(double)(*((float *)(&modbusdatauint))));
+#endif
 	if(ord<PRIMARYORDERCOUNT)
 		(*add_double_to_primary_link[ord-1])((meterDataPrimary*)p,(double)(*((float *)(&modbusdatauint))));
 	(*i)+=MODBUSDATAFLOATSIZE;
@@ -903,6 +909,7 @@ int CreateModBusRegisterInfoCircleFromMysql(deviceNode * p){
 		}
 	if(mp1) continue;
         mp2 = (modbusRegisterInfo *)malloc(sizeof(modbusRegisterInfo));
+	MBRI_count++;
 #ifdef DEBUG_outofmemory
 //	if(memory_node_counter_MBRI%100 == 0)
 		printf("++ModBusRegisterInfo堆缓存计数%d--创建MBRI，meterID=%d,ord=%d,addr=%d,bytenum=%d,datatype=%d\n",++memory_node_counter_MBRI,p->meterID,atoi(mysqlrow[0]),atoi(mysqlrow[1]),atoi(mysqlrow[2]),atoi(mysqlrow[3]));
@@ -1000,6 +1007,7 @@ int CreateDeviceNodeCircleFromMysql(listeningNode * p){
 	//确定只有没被添加过得DN才会申请内存并添加
 
         p2 = (deviceNode *)malloc(sizeof(deviceNode));
+	DNode_count++;
 #ifdef DEBUG_outofmemory
 //	if(memory_node_counter_DN%100 == 0)
 		printf("++deviceNode堆缓存计数%d--创建新DN-meterID=%d,deviceNumber=%d\n",++memory_node_counter_DN,atoi(mysqlrow[1]),atoi(mysqlrow[0]));
@@ -1085,6 +1093,7 @@ void RBTFree(struct listeningNode *node)
         FreeDeviceNodeCircle(node -> headDevice);
         node -> headDevice = NULL;
         free(node);
+	LNode_count--;
 #ifdef DEBUG_outofmemory
 	printf("--listeningNode堆缓存计数%d\n",--memory_node_counter_LNode);
 #endif
@@ -1107,6 +1116,7 @@ uint8_t FreeDeviceNodeCircle(deviceNode * p1){
         //free deviceNode circle
         p2 = p1-> next;
         free(p1);
+	DNode_count--;
 #ifdef DEBUG_outofmemory
 	printf("--deviceNode堆缓存计数%d\n",--memory_node_counter_DN);
 #endif
@@ -1123,6 +1133,7 @@ uint8_t FreeModBusRegisterInfoCircle(modbusRegisterInfo * p1){
     while((p1)){
         p2 = p1 -> next;
         free(p1);
+	MBRI_count--;
 #ifdef DEBUG_outofmemory
 	printf("--ModBusRegisterInfo堆缓存计数%d\n",--memory_node_counter_MBRI);
 #endif

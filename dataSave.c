@@ -81,6 +81,7 @@ void * ThreadDataSave(void * arg){
 printf("meterDataPrimary has been saved\n");
 //1.4 free meterdataprimary node
 				free(p);
+				data_save_primary_count--;
 #ifdef DEBUG_outofmemory
 		printf("--dataSave缓存个数：%d\n",--memory_node_counter_datasave);
 #endif
@@ -114,6 +115,7 @@ printf("meterDataPrimary has been saved\n");
 			}else{
 				printf("meterDataSecondary has been saved\n");
 				free(p1);
+				data_save_secondary_count--;
 
 #ifdef DEBUG_outofmemory
 		printf("--dataSave缓存个数：%d\n",--memory_node_counter_datasave);
@@ -134,6 +136,7 @@ char SendBackMeterDataPrimaryNode(meterDataPrimary * p){
     }else{
 		printf("meterID-%d,常规数据无法存入次数超过上限\n",p->meterID);
 		free(p);
+		data_save_primary_count--;
 #ifdef DEBUG_outofmemory
 		printf("--dataSave缓存个数：%d\n",--memory_node_counter_datasave);
 #endif
@@ -150,6 +153,7 @@ char SendBackMeterDataSecondaryNode(meterDataSecondary* p){
     }else{
 		printf("meterID-%d,用户自定义数据无法存入次数超过上限\n",p->meterID);
 		free(p);
+		data_save_secondary_count--;
 
 #ifdef DEBUG_outofmemory
 		printf("--dataSave缓存个数：%d\n",--memory_node_counter_datasave);
