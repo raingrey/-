@@ -78,12 +78,14 @@ void * ThreadDataSave(void * arg){
 				pthread_mutex_unlock(&data_save_mtx);
 				p=NULL;
 			}else{
-printf("meterDataPrimary has been saved\n");
+				printf("meterDataPrimary has been saved\n");
 //1.4 free meterdataprimary node
 				free(p);
 				data_save_primary_count--;
 #ifdef DEBUG_outofmemory
-		printf("--dataSave缓存个数：%d\n",--memory_node_counter_datasave);
+				--memory_node_counter_datasave;
+				if(memory_node_counter_datasave%0xff==0)
+				printf("--dataSave缓存个数：%d\n",memory_node_counter_datasave);
 #endif
 				p = NULL;
 			}
@@ -118,7 +120,9 @@ printf("meterDataPrimary has been saved\n");
 				data_save_secondary_count--;
 
 #ifdef DEBUG_outofmemory
-		printf("--dataSave缓存个数：%d\n",--memory_node_counter_datasave);
+				memory_node_counter_datasave--;
+				if(memory_node_counter_datasave%0xff==0)
+				printf("--dataSave缓存个数：%d\n",memory_node_counter_datasave);
 #endif
 				p1= NULL;
 			}
@@ -138,7 +142,9 @@ char SendBackMeterDataPrimaryNode(meterDataPrimary * p){
 		free(p);
 		data_save_primary_count--;
 #ifdef DEBUG_outofmemory
-		printf("--dataSave缓存个数：%d\n",--memory_node_counter_datasave);
+		memory_node_counter_datasave--;
+		if(memory_node_counter_datasave%0xff==0)
+		printf("--dataSave缓存个数：%d\n",memory_node_counter_datasave);
 #endif
     }
     return 1;
@@ -156,7 +162,9 @@ char SendBackMeterDataSecondaryNode(meterDataSecondary* p){
 		data_save_secondary_count--;
 
 #ifdef DEBUG_outofmemory
-		printf("--dataSave缓存个数：%d\n",--memory_node_counter_datasave);
+		memory_node_counter_datasave--;
+		if(memory_node_counter_datasave%0xff==0)
+		printf("--dataSave缓存个数：%d\n",memory_node_counter_datasave);
 #endif
 	    return 1;
     }

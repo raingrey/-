@@ -125,6 +125,7 @@ void RBTFree(struct listeningNode *node);
 //deviceNode和ModBusRegisterInfo链表处理
 //从mysql读东西
 int GetMeterID(uint64_t dtuid,uint8_t addrstrtmp);
+deviceNode * GetDeviceNodeComfortDeviceNumber(listeningNode *p,uint32_t device_number);
 //generate or updata listeningNode's deviceNode link from mysql
 int  CreateDeviceNodeCircleFromMysql(struct listeningNode *p);
 //generate or updata deviceNode's modbusRegisterInfo link from mysql
@@ -282,7 +283,7 @@ void * ThreadDataProcess(void * arg){
 			LNode_count++;
 #ifdef DEBUG_outofmemory
 			//测试内存溢出的问题
-			printf("+++++++++++++++LNode堆缓存计数%d--没有查找到LNode,创建的DTUID为：%d\n",++memory_node_counter_LNode,dtuid);
+			printf("+++++++++++++++LNode堆缓存计数%d--没有查找到LNode,创建的DTUID为：%d-时间：%s\n",++memory_node_counter_LNode,dtuid,get_str_time_now());
 			//测试内存溢出的问题
 #endif
 			memset(p1,0,(sizeof(listeningNode)));
@@ -330,34 +331,18 @@ void * ThreadDataProcess(void * arg){
 #endif
 
 //2.3 from now udpMsg is confirmed have device address,so i can identify it's meterID\startRegister*/
-		meterid=GetMeterID(dtuid,mbds.addr);
-		//check if meter id is correct
-		if(meterid == 0){
-			goto data_process_reset_connect;
-		}
-
-#ifdef DEBUG
-		printf("\n******************************************************\n"
-		       "current meterID = %d\n"
-		       "******************************************************\n",meterid);
-#endif
-
-//2.3.2 get device node from listeningNode
-		dnp=GetDeviceNodeComfortMeterid(p1,meterid);
-        	if((dnp == NULL)||(dnp -> modbusRegisterInfoHead == NULL)){
-#ifdef DEBUG
-			if(dnp == NULL)
-				printf("这次创建节点是由于没有DN符合");
-			if(dnp&&dnp -> modbusRegisterInfoHead == NULL)
-				printf("这次创建节点是由于DN没有MBRI符合");
-#endif
+		//快速通道，不必查库;出现协议修改，整条modbus必须离线超dumptime才能更新
+		if(dnp = GetDeviceNodeComfortDeviceNumber(p1,mbds.addr)){
+			meterid = dnp -> meterID;
+		}else{
 			if(CreateDeviceNodeCircleFromMysql(p1)){
 				printf("\nAlarm:mysql have no device node info about DTUID %ld",p1 -> DTUID);
 				goto data_process_reset_connect;
 				//zero it's dumptime
 			}
-			dnp=GetDeviceNodeComfortMeterid(p1,meterid);
-			if((dnp == NULL)||(dnp -> modbusRegisterInfoHead == NULL)){
+			if(dnp = GetDeviceNodeComfortDeviceNumber(p1,mbds.addr)){
+				meterid = dnp -> meterID;
+			}else{
 				printf("\nAlarm:mysql have no  info about meterID %d\n",meterid);
 				goto data_process_reset_connect;
 			}
@@ -377,7 +362,7 @@ void * ThreadDataProcess(void * arg){
 			p1 -> heartBeat=0;
 			//3is the byte number when the length of modbus data is 8, this is host data,analysis it
 			//get it's start register 
-            		if((dnp -> startRegister!=mbds.sR)){
+			if((dnp -> startRegister!=mbds.sR)){
 				if(CreateDeviceNodeCircleFromMysql(p1)){
 					//we have no need to go to sleep,host data finally go to sleep
 					printf("\nAlarm:mysql have no device node info about DTUID %ld",p1 -> DTUID);
@@ -432,6 +417,8 @@ void * ThreadDataProcess(void * arg){
 			meterdataprimary= (meterDataPrimary*)malloc(sizeof(meterDataPrimary));
 				//测试内存溢出的问题
 #ifdef DEBUG_outofmemory
+		memory_node_counter_datasave++;
+		if(memory_node_counter_datasave% 0xff == 0)
 				printf("++datasave堆缓存计数%d--申请了常规有效数据\n",++memory_node_counter_datasave);
 #endif
 				//测试内存溢出的问题
@@ -441,9 +428,11 @@ void * ThreadDataProcess(void * arg){
 		else {
 			meterdatasecondary = (meterDataSecondary*)malloc(sizeof(meterDataSecondary));
 			//测试内存溢出的问题
-	#ifdef DEBUG_outofmemory
+#ifdef DEBUG_outofmemory
+		memory_node_counter_datasave++;
+		if(memory_node_counter_datasave% 0xff == 0)
 			printf("++datasave堆缓存计数%d--申请了用户自定义数据\n",++memory_node_counter_datasave);
-	#endif
+#endif
 			//测试内存溢出的问题
 		}
 		meterdataprimary -> meterID = meterid;
@@ -496,7 +485,9 @@ data_process_no_heartbeat:
             	p1 -> dumpTime=time(NULL);
 data_process_continue:
 #ifdef DEBUG_outofmemory
-		printf("--udpmsg缓存个数：%d--网络数据被复制完\n",--memory_node_counter_udpmsg);
+		--memory_node_counter_udpmsg;
+		if(memory_node_counter_udpmsg % 0xff == 0)
+			printf("--udpmsg缓存个数：%d--网络数据被复制完,时间：%s\n",memory_node_counter_udpmsg,get_str_time_now());
 #endif
 		free(p);
 		p=NULL;
@@ -840,7 +831,19 @@ udpMsg * UdpMsgNodeWaitingForHandle(){
     //if there is no udp data
     return NULL;
 }
-
+deviceNode * GetDeviceNodeComfortDeviceNumber(listeningNode *p,uint32_t device_number){
+	deviceNode * dnp = p -> headDevice;
+	while(dnp){
+#ifdef DEBUG
+		printf("GetDeviceNodeComfortMeterid-----DN->meterID=%d----searching for meterid=%d",dnp -> meterID,meterid);
+#endif
+		if(dnp -> deviceNumber == device_number){
+			break;
+		}
+		dnp = dnp -> next;
+	}
+        return dnp;
+}
 int GetMeterID(uint64_t dtuid,uint8_t addrstrtmp){
 	uint8_t querystrtmp[MYSQLQUERYSTRSIZE] = {0};
 	int meterid=0;
@@ -895,62 +898,81 @@ int CreateModBusRegisterInfoCircleFromMysql(deviceNode * p){
 
 
     /// create modbusRegisterInfo circle
-    while(mysqlrow=mysql_fetch_row(mysqlres)){
-	//首先，MBRI链中已有数据要剔除,然后，还要更新此阶位下已有数据
-	i=atoi(mysqlrow[0]);
-	for(mp1 = p -> modbusRegisterInfoHead;mp1;mp1 = mp1 -> next)
-		if(i > mp1 -> ord)
-			lastmp1=mp1;
-		else if(i == mp1 -> ord){
-			mp1 -> addr= atoi(mysqlrow[1]);
-			mp1 -> bytenum= atoi(mysqlrow[2]);
-			mp1 -> datatype= atoi(mysqlrow[3]);
-			break;
+	if(mysqlrow=mysql_fetch_row(mysqlres))
+		i=atoi(mysqlrow[0]);
+	else	return 1;
+	//直接判断mysql的返回资源是否为空产生过死循环的情况，mysql返回的东西，但是其中内容为0,
+	//因此需要判0，还好ord不为0
+    	while(i!=0){
+		//首先，MBRI链中已有数据要剔除,然后，还要更新此阶位下已有数据
+		//上一行去除，只有新建节点才会、才能！建MBRI；因此不必再重
+		/*
+		for(mp1 = p -> modbusRegisterInfoHead;mp1;mp1 = mp1 -> next)
+			if(i > mp1 -> ord)
+				lastmp1=mp1;
+			else if(i == mp1 -> ord){
+				mp1 -> addr= atoi(mysqlrow[1]);
+				mp1 -> bytenum= atoi(mysqlrow[2]);
+				mp1 -> datatype= atoi(mysqlrow[3]);
+				break;
+			}
+		if(mp1) goto CreateModBusRegisterInfoCircleFromMysqlcontinue;
+		*/
+		mp2 = (modbusRegisterInfo *)malloc(sizeof(modbusRegisterInfo));
+		MBRI_count++;
+	#ifdef DEBUG_outofmemory
+		memory_node_counter_MBRI++;
+		if(memory_node_counter_MBRI%0xff == 0)
+			printf("++ModBusRegisterInfo堆缓存计数%d--创建MBRI，meterID=%d,ord=%d,addr=%d,bytenum=%d,datatype=%d,%s\n",memory_node_counter_MBRI,p->meterID,atoi(mysqlrow[0]),atoi(mysqlrow[1]),atoi(mysqlrow[2]),atoi(mysqlrow[3]),get_str_time_now());
+	#endif
+		memset(mp2,0,sizeof(modbusRegisterInfo));
+		//get modbusRegisterInfo
+		mp2 -> ord = atoi(mysqlrow[0]);
+		mp2 -> addr= atoi(mysqlrow[1]);
+		mp2 -> bytenum= atoi(mysqlrow[2]);
+		mp2 -> datatype= atoi(mysqlrow[3]);
+		if(MYSQLSTARTREGISTERORD == mp2 -> ord){
+		    //startregister could be 0;don't check it by 0;
+		    p -> startRegister=mp2 -> addr;
+		    //one result for per modbusbytenumber per device
 		}
-	if(mp1) continue;
-        mp2 = (modbusRegisterInfo *)malloc(sizeof(modbusRegisterInfo));
-	MBRI_count++;
-#ifdef DEBUG_outofmemory
-//	if(memory_node_counter_MBRI%100 == 0)
-		printf("++ModBusRegisterInfo堆缓存计数%d--创建MBRI，meterID=%d,ord=%d,addr=%d,bytenum=%d,datatype=%d\n",++memory_node_counter_MBRI,p->meterID,atoi(mysqlrow[0]),atoi(mysqlrow[1]),atoi(mysqlrow[2]),atoi(mysqlrow[3]));
-#endif
-        memset(mp2,0,sizeof(modbusRegisterInfo));
-        //get modbusRegisterInfo
-        mp2 -> ord = atoi(mysqlrow[0]);
-        mp2 -> addr= atoi(mysqlrow[1]);
-        mp2 -> bytenum= atoi(mysqlrow[2]);
-        mp2 -> datatype= atoi(mysqlrow[3]);
-        if(MYSQLSTARTREGISTERORD == mp2 -> ord){
-            //startregister could be 0;don't check it by 0;
-            p -> startRegister=mp2 -> addr;
-            //one result for per modbusbytenumber per device
-        }
-	//当modbusRegisterInfoHead没有元素
-	if(! p -> modbusRegisterInfoHead){
-		p -> modbusRegisterInfoHead = mp2;
-	}else{
-		//排序存放
-		//lastmp1和next都有，找到插入位置
-		//lastmp1有next无，插入在末尾
-		//lastmp1无next无，head有，则mp2在head先，插头
-		if(lastmp1&&lastmp1 -> next)
-			mp2 -> next = lastmp1 -> next;
-		else if(lastmp1)
-			lastmp1 -> next = mp2;
-		else{ 
-			lastmp1 = p -> modbusRegisterInfoHead -> next;
+		//当modbusRegisterInfoHead没有元素
+		if(! p -> modbusRegisterInfoHead){
 			p -> modbusRegisterInfoHead = mp2;
-			p -> modbusRegisterInfoHead -> next = lastmp1; 
+		}else{
+			mp1 -> next = mp2;
+			//排序存放
+			//lastmp1和next都有，找到插入位置
+			//lastmp1有next无，插入在末尾
+			//lastmp1无next无，head有，则mp2在head先，插头
+			/*只有新建节点才会、才能！建MBRI；因此不必查重
+			if(lastmp1&&lastmp1 -> next)
+				mp2 -> next = lastmp1 -> next;
+			else if(lastmp1)
+				lastmp1 -> next = mp2;
+			else{ 
+				lastmp1 = p -> modbusRegisterInfoHead -> next;
+				p -> modbusRegisterInfoHead = mp2;
+				p -> modbusRegisterInfoHead -> next = lastmp1; 
+			}
+			*/
 		}
+		mp1 = mp2;
+		mp2 = NULL;
+CreateModBusRegisterInfoCircleFromMysqlcontinue:
+		if(mysqlrow=mysql_fetch_row(mysqlres))
+			i=atoi(mysqlrow[0]);
+		else
+			i=0;
 	}
-	mp2 = NULL;
-    }
 
         mysql_free_result(mysqlres);
         mysqlres = NULL;
 	return 0;
 }
-
+#ifdef DEBUG_timecost
+static CreateDeviceNodeCircleFromMysql_timecost=300;
+#endif
 int CreateDeviceNodeCircleFromMysql(listeningNode * p){
 	uint64_t dtuid = p -> DTUID;
 	uint8_t querystrtmp[MYSQLQUERYSTRSIZE] = {0};
@@ -963,7 +985,11 @@ int CreateDeviceNodeCircleFromMysql(listeningNode * p){
 	MYSQL_RES * mysqlres=NULL;
 	MYSQL_ROW mysqlrow;
 	time(&LocalTime);
+#ifdef DEBUG_timecost
+if(CreateDeviceNodeCircleFromMysql_timecost>0)
+printf("查库开始时间数：%d\n",(int)time(NULL));
 
+#endif
 	/// get device node data from mysql
 	sprintf(querystrtmp,
             "select deviceNumber,meterID from MeterIdentify where DTUID=%ld",
@@ -983,50 +1009,90 @@ int CreateDeviceNodeCircleFromMysql(listeningNode * p){
 	}
     	/// get device node data from mysql
 
+	if(mysqlrow=mysql_fetch_row(mysqlres))
+		i=atoi(mysqlrow[1]);
+	else 	return 1;
+#ifdef DEBUG_timecost
+if(CreateDeviceNodeCircleFromMysql_timecost>0)
+printf("查库结束时间数：%d\n\n",(int)time(NULL));
+
+#endif
 
     /// create device node circle
-    while(mysqlrow=mysql_fetch_row(mysqlres)){
-	//确定只有没被添加过得DN才会申请内存并添加
-	i=atoi(mysqlrow[1]);
-	for(p1 = p -> headDevice;p1;lastp1=p1,p1 = p1 -> next){//lastp1用于存放链表最后一个元素(用于被插)
-#ifdef DEBUG
-//		printf("i和p1->meterID为%d-%d\n",i,p1->meterID);
+	while(i!=0){
+#ifdef DEBUG_timecost
+if(CreateDeviceNodeCircleFromMysql_timecost>0)
+printf("开始寻找DN时间数：%d\n",(int)time(NULL));
+
 #endif
-		if(i == p1 -> meterID){
-        		p1 -> deviceNumber = atoi(mysqlrow[0]);
-			if(CreateModBusRegisterInfoCircleFromMysql(p1)){
-				printf("\n%s Alarm: No ModBusRegisterInfo founded when create modbusRegisterInfo circle for deviceNode %d",ctime(&LocalTime),p1 -> meterID);
+		//确定只有没被添加过得DN才会申请内存并添加
+		for(p1 = p -> headDevice;p1;lastp1=p1,p1 = p1 -> next){//lastp1用于存放链表最后一个元素(用于被插)
+	#ifdef DEBUG
+	//		printf("i和p1->meterID为%d-%d\n",i,p1->meterID);
+	#endif
+			if(i == p1 -> meterID){
+				p1 -> deviceNumber = atoi(mysqlrow[0]);
+				//确定了长断线才会更新，因此不必在此更新
+//				if(CreateModBusRegisterInfoCircleFromMysql(p1)){
+//					printf("\n%s Alarm: No ModBusRegisterInfo founded when create modbusRegisterInfo circle for deviceNode %d",ctime(&LocalTime),p1 -> meterID);
+//				}
+	#ifdef DEBUG
+				printf("跳过了重复的meterID\n");
+	#endif
+				break;
 			}
-#ifdef DEBUG
-			printf("跳过了重复的meterID\n");
-#endif
-			break;
 		}
-	}
-	if(p1)	continue;
-	//确定只有没被添加过得DN才会申请内存并添加
+		if(p1)	goto CreateDeviceNodeCircleFromMysqlcontinue;
+#ifdef DEBUG_timecost
+if(CreateDeviceNodeCircleFromMysql_timecost>0)
+printf("结束时间数：%d\n\n",(int)time(NULL));
 
-        p2 = (deviceNode *)malloc(sizeof(deviceNode));
-	DNode_count++;
-#ifdef DEBUG_outofmemory
-//	if(memory_node_counter_DN%100 == 0)
-		printf("++deviceNode堆缓存计数%d--创建新DN-meterID=%d,deviceNumber=%d\n",++memory_node_counter_DN,atoi(mysqlrow[1]),atoi(mysqlrow[0]));
 #endif
-        memset(p2,0,sizeof(deviceNode));
-        p2 -> deviceNumber = atoi(mysqlrow[0]);
-        p2 -> meterID = atoi(mysqlrow[1]);
-        if(CreateModBusRegisterInfoCircleFromMysql(p2)){
-            printf("\n%s Alarm: No ModBusRegisterInfo founded when create modbusRegisterInfo circle for deviceNode %d",ctime(&LocalTime),p2 -> meterID);
-        }
-	//当headDevice没有元素
-	if(p -> headDevice == NULL){
-		p -> headDevice = p2;
-	}else{
-		lastp1 -> next = p2;
-	}
-	p2=NULL;
+		//确定只有没被添加过得DN才会申请内存并添加
+
+		p2 = (deviceNode *)malloc(sizeof(deviceNode));
+		DNode_count++;
+#ifdef DEBUG_outofmemory
+		memory_node_counter_DN++;
+		if(memory_node_counter_DN%0xff == 0)
+			printf("++deviceNode堆缓存计数%d--创建新DN-meterID=%d,deviceNumber=%d,%s\n",memory_node_counter_DN,atoi(mysqlrow[1]),atoi(mysqlrow[0]),get_str_time_now());
+#endif
+		memset(p2,0,sizeof(deviceNode));
+		p2 -> deviceNumber = atoi(mysqlrow[0]);
+		p2 -> meterID = atoi(mysqlrow[1]);
+#ifdef DEBUG_timecost
+		if(CreateDeviceNodeCircleFromMysql_timecost>0)
+		printf("开始MBRI时间数：%d\n",(int)time(NULL));
+
+#endif
+		if(CreateModBusRegisterInfoCircleFromMysql(p2)){
+		    printf("\n%s Alarm: No ModBusRegisterInfo founded when create modbusRegisterInfo circle for deviceNode %d",ctime(&LocalTime),p2 -> meterID);
+		}
+#ifdef DEBUG_timecost
+		if(CreateDeviceNodeCircleFromMysql_timecost>0)
+		printf("结束MBRI时间数：%d\n\n",(int)time(NULL));
+		CreateDeviceNodeCircleFromMysql_timecost--;
+#endif
+
+		//当headDevice没有元素
+		if(p -> headDevice == NULL){
+			p -> headDevice = p2;
+		}else{
+			lastp1 -> next = p2;
+		}
+		p2=NULL;
+CreateDeviceNodeCircleFromMysqlcontinue:
+		if(mysqlrow=mysql_fetch_row(mysqlres))
+			i=atoi(mysqlrow[1]);
+		else 	i=0;
+
     }
-    /// create device node circle
+#ifdef DEBUG_timecost
+if(CreateDeviceNodeCircleFromMysql_timecost>0)
+printf("函数结束时间数：%d\n\n\n",(int)time(NULL));
+
+#endif
+   /// create device node circle
     /// create device node circle
     /// create device node circle
     ///
@@ -1095,7 +1161,7 @@ void RBTFree(struct listeningNode *node)
         free(node);
 	LNode_count--;
 #ifdef DEBUG_outofmemory
-	printf("--listeningNode堆缓存计数%d\n",--memory_node_counter_LNode);
+	printf("--listeningNode堆缓存计数%d,%s\n",--memory_node_counter_LNode,get_str_time_now());
 #endif
         node = NULL;
     }
@@ -1118,7 +1184,7 @@ uint8_t FreeDeviceNodeCircle(deviceNode * p1){
         free(p1);
 	DNode_count--;
 #ifdef DEBUG_outofmemory
-	printf("--deviceNode堆缓存计数%d\n",--memory_node_counter_DN);
+	printf("--deviceNode堆缓存计数%d,%s\n",--memory_node_counter_DN,get_str_time_now());
 #endif
 	p1=p2;
         p2 = NULL;
@@ -1135,7 +1201,7 @@ uint8_t FreeModBusRegisterInfoCircle(modbusRegisterInfo * p1){
         free(p1);
 	MBRI_count--;
 #ifdef DEBUG_outofmemory
-	printf("--ModBusRegisterInfo堆缓存计数%d\n",--memory_node_counter_MBRI);
+	printf("--ModBusRegisterInfo堆缓存计数%d,%s\n",--memory_node_counter_MBRI,get_str_time_now());
 #endif
 
         p1 = p2;
@@ -1144,6 +1210,11 @@ uint8_t FreeModBusRegisterInfoCircle(modbusRegisterInfo * p1){
     return 1;
 }
 
+//策略
+//心跳超时MMAX，暂停伪装
+//心跳超时MAX，暂停伪装
+//断线时间超限，将会被清理
+//	连接占用缓存过多，将会采用更激进的方式清理连接
 char RBTListeningNodeCheck(){
 	int i=0;
 	struct rb_node * node= rb_first(&listeningNodeRoot);
@@ -1153,21 +1224,30 @@ char RBTListeningNodeCheck(){
         //1.2 handle heartBeat logic
         if(p -> heartBeat > MMAXHEARTBEATNUMBER){
             p -> heartBeat = HOSTHEARTBEATNUMBER;
-        }
-        if((p -> heartBeat <= MAXHEARTBEATNUMBER)&&(p -> heartBeat > HOSTHEARTBEATNUMBER)){
+        }else if((p -> heartBeat <= MAXHEARTBEATNUMBER)&&(p -> heartBeat > HOSTHEARTBEATNUMBER)){
             HostNodeUdpSend(p);
-        }
-        //1.2 handle heartBeat logic
-        //1.1 handle dumpTime out
-        i=(int)(time(NULL)-(p -> dumpTime));
-        if(i > MAXDUMPTIME){
-            struct listeningNode *data = RBTSearch(&listeningNodeRoot,p -> DTUID);
-            if (data) {
-                rb_erase(&data->node, &listeningNodeRoot);
-                RBTFree(data);
-                data = NULL;
-            }
-         }
+	}
+	//1.2 handle heartBeat logic
+	//1.1 handle dumpTime out
+	i=(int)(time(NULL)-(p -> dumpTime));
+	if(stable_buffer_size > stable_buffer_limit_size)
+		if(i > MIDDUMPTIME){
+			struct listeningNode *data = RBTSearch(&listeningNodeRoot,p -> DTUID);
+			if (data) {
+				rb_erase(&data->node, &listeningNodeRoot);
+				RBTFree(data);
+				data = NULL;
+			}
+		}
+
+	if(i > MAXDUMPTIME){
+		struct listeningNode *data = RBTSearch(&listeningNodeRoot,p -> DTUID);
+		if (data) {
+			rb_erase(&data->node, &listeningNodeRoot);
+			RBTFree(data);
+			data = NULL;
+		}
+	}
         //1.1 handle dumpTime out
     }
 	return 1;

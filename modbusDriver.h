@@ -11,7 +11,13 @@ extern int dynamic_buffer_size;
 //动态缓存限制180M,动态缓存仅会限制udpMsg缓存大小，dataSave不受限制
 extern int dynamic_buffer_limit_size;
 
+//测试时间花费
+//当时受数据库没索引限制，后来加了，时间花费不再可按秒测
+//#define DEBUG_timecost
+#ifdef DEBUG_timecost
 
+
+#endif
 #define DEBUG_outofmemory
 #ifdef DEBUG_outofmemory
 //测试内存溢出的问题
@@ -34,12 +40,14 @@ extern int memory_node_counter_DN;
 
 //宕机20小时删除链接
 #define MAXDUMPTIME 72000//seconds
+//稳定缓存超限后积极删除连接时间
+#define MIDDUMPTIME 3600//seconds
 //超出此次数再次处理包
-#define MMAXHEARTBEATNUMBER 600//
+#define MMAXHEARTBEATNUMBER 2000//
 //超出此次数忽略包
-#define MAXHEARTBEATNUMBER 500//
+#define MAXHEARTBEATNUMBER 200//
 //超出此次数伪装主机
-#define HOSTHEARTBEATNUMBER 20
+#define HOSTHEARTBEATNUMBER 100 
 
 //heart beat data less than 15 byte
 #define HEARTBEATSTR "influid.com"

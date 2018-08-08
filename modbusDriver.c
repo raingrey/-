@@ -276,7 +276,9 @@ int main(int argc,char *argv[])
 		}
 		//测试内存溢出的问题
 #ifdef DEBUG_outofmemory
-		printf("-+udpmsg缓存个数：%d\n",++memory_node_counter_udpmsg);
+		memory_node_counter_udpmsg++;
+		if(memory_node_counter_udpmsg%0xffff==0)
+		printf("-+udpmsg缓存个数：%d\n",memory_node_counter_udpmsg);
 #endif
 		//测试内存溢出的问题
 
