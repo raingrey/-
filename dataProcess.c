@@ -123,13 +123,15 @@ void RBTFree(struct listeningNode *node);
 //红黑树处理
 //
 //deviceNode和ModBusRegisterInfo链表处理
-//从mysql读东西
+//当前状态会dumptime时间再连后才会更新缓存的DNode、MBRI链，这个留着可以尝试在哪儿放个文件，程序可以进入慢速但更新缓存状态
 int GetMeterID(uint64_t dtuid,uint8_t addrstrtmp);
 deviceNode * GetDeviceNodeComfortDeviceNumber(listeningNode *p,uint32_t device_number);
 //generate or updata listeningNode's deviceNode link from mysql
 int  CreateDeviceNodeCircleFromMysql(struct listeningNode *p);
-//generate or updata deviceNode's modbusRegisterInfo link from mysql
+//为了创建MBRI快，不会查链重复
 int CreateModBusRegisterInfoCircleFromMysql(deviceNode *p);
+//创建MBRI需要快，但是更新MBRI需要防重复(未调-未用过)
+int UpdateModBusRegisterInfoCircleFromMysql(deviceNode * p){
 //从mysql读东西
 
 
@@ -1103,7 +1105,99 @@ printf("函数结束时间数：%d\n\n\n",(int)time(NULL));
     /// send circle back or alarm
 }
 
+int UpdateModBusRegisterInfoCircleFromMysql(deviceNode * p){
 
+    uint8_t querystrtmp[MYSQLQUERYSTRSIZE] = {0};
+    /// get  of this device from mysql
+    MYSQL_RES * mysqlres=NULL;
+    MYSQL_ROW mysqlrow;
+    int i=0,j=0;
+    modbusRegisterInfo * mp1=NULL;
+    modbusRegisterInfo * mp2=NULL;
+    modbusRegisterInfo * lastmp1=NULL;
+    time(&LocalTime);
+    /// get modbusRegisterInfo from mysql
+    sprintf(querystrtmp,"select ord,address,byteNumber,dataType from DataIdentify where meterID=%d order by address ASC,ord ASC",p -> meterID);
+	if(mysql_real_query(sql,querystrtmp,strlen(querystrtmp))){
+		printf("\n%sfailed to query mysql when handle deviceNode meterid:%d,deviceNumber:%d, error msg%s\n",ctime(&LocalTime),p -> meterID,p -> deviceNumber,mysql_error(sql));
+		return 1;
+	}
+	if(!(mysqlres=mysql_store_result(sql))){
+        printf("\n%s failed to get result of mysql when handle deviceNode meterid:%d,deviceNumber:%d, error msg%s\n",ctime(&LocalTime),p -> meterID,p -> deviceNumber,mysql_error(sql));
+		mysql_free_result(mysqlres);
+		mysqlres = NULL;
+        return 1;
+	}
+    /// get modbusRegisterInfo from mysql
+
+
+    /// create modbusRegisterInfo circle
+	if(mysqlrow=mysql_fetch_row(mysqlres))
+		i=atoi(mysqlrow[0]);
+	else	return 1;
+	//直接判断mysql的返回资源是否为空产生过死循环的情况，mysql返回的东西，但是其中内容为0,
+	//因此需要判0，还好ord不为0
+    	while(i!=0){
+		//首先，MBRI链中已有数据要剔除,然后，还要更新此阶位下已有数据
+		for(mp1 = p -> modbusRegisterInfoHead;mp1;mp1 = mp1 -> next)
+			if(i > mp1 -> ord)
+				lastmp1=mp1;
+			else if(i == mp1 -> ord){
+				mp1 -> addr= atoi(mysqlrow[1]);
+				mp1 -> bytenum= atoi(mysqlrow[2]);
+				mp1 -> datatype= atoi(mysqlrow[3]);
+				break;
+			}
+		if(mp1) goto CreateModBusRegisterInfoCircleFromMysqlcontinue;
+		mp2 = (modbusRegisterInfo *)malloc(sizeof(modbusRegisterInfo));
+		MBRI_count++;
+	#ifdef DEBUG_outofmemory
+		memory_node_counter_MBRI++;
+		if(memory_node_counter_MBRI%0xff == 0)
+			printf("++ModBusRegisterInfo堆缓存计数%d--创建MBRI，meterID=%d,ord=%d,addr=%d,bytenum=%d,datatype=%d,%s\n",memory_node_counter_MBRI,p->meterID,atoi(mysqlrow[0]),atoi(mysqlrow[1]),atoi(mysqlrow[2]),atoi(mysqlrow[3]),get_str_time_now());
+	#endif
+		memset(mp2,0,sizeof(modbusRegisterInfo));
+		//get modbusRegisterInfo
+		mp2 -> ord = atoi(mysqlrow[0]);
+		mp2 -> addr= atoi(mysqlrow[1]);
+		mp2 -> bytenum= atoi(mysqlrow[2]);
+		mp2 -> datatype= atoi(mysqlrow[3]);
+		if(MYSQLSTARTREGISTERORD == mp2 -> ord){
+		    //startregister could be 0;don't check it by 0;
+		    p -> startRegister=mp2 -> addr;
+		    //one result for per modbusbytenumber per device
+		}
+		//当modbusRegisterInfoHead没有元素
+		if(! p -> modbusRegisterInfoHead){
+			p -> modbusRegisterInfoHead = mp2;
+		}else{
+			mp1 -> next = mp2;
+			//排序存放
+			//lastmp1和next都有，找到插入位置
+			//lastmp1有next无，插入在末尾
+			//lastmp1无next无，head有，则mp2在head先，插头
+			if(lastmp1&&lastmp1 -> next)
+				mp2 -> next = lastmp1 -> next;
+			else if(lastmp1)
+				lastmp1 -> next = mp2;
+			else{ 
+				lastmp1 = p -> modbusRegisterInfoHead -> next;
+				p -> modbusRegisterInfoHead = mp2;
+				p -> modbusRegisterInfoHead -> next = lastmp1; 
+			}
+		}
+		mp2 = NULL;
+CreateModBusRegisterInfoCircleFromMysqlcontinue:
+		if(mysqlrow=mysql_fetch_row(mysqlres))
+			i=atoi(mysqlrow[0]);
+		else
+			i=0;
+	}
+
+        mysql_free_result(mysqlres);
+        mysqlres = NULL;
+	return 0;
+}
 
 char HostNodeUdpSend(listeningNode * tree){
 
