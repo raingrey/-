@@ -86,8 +86,8 @@ int main (int argc,char* argv[]){
 	}
 	if(argc > 5){
 		sleep_time=atoi(argv[5]);
-		printf("数据包发送间隔%dms\n",sleep_time);
-		sleep_time*=1000;
+		printf("数据包发送间隔%dus\n",sleep_time);
+//		sleep_time*=1000;
 	}else
 		sleep_time=1000000;
 
