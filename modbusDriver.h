@@ -11,17 +11,13 @@ extern int dynamic_buffer_size;
 //动态缓存限制180M,动态缓存仅会限制udpMsg缓存大小，dataSave不受限制
 extern int dynamic_buffer_limit_size;
 
-//测试时间花费
-//当时受数据库没索引限制，后来加了，时间花费不再可按秒测
-//#define DEBUG_timecost
-#ifdef DEBUG_timecost
-
-
-#endif
+//DEBUG信息
+//#define DEBUG
+//测试睡眠合理性
+//#define DEBUG_threadsleep
+//测试内存溢出的问题
 #define DEBUG_outofmemory
 #ifdef DEBUG_outofmemory
-//测试内存溢出的问题
-//#define DEBUG
 extern int memory_node_counter_udpmsg;
 extern int memory_node_counter_datasave;
 //listeningNode

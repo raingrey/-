@@ -39,7 +39,7 @@ void * ThreadDataSave(void * arg){
 		pthread_mutex_lock(&data_save_mtx);
 //if there has no meter data to save hung up thread
 		while((meterDataPrimaryHead == NULL)&&(meterDataSecondaryHead == NULL)){
-#ifdef DEBUG
+#ifdef DEBUG_threadsleep
 			printf("数据保存线程第————%d————次睡眠,时间-%s",++sleep_counter,get_str_time_now());
 #endif
 			pthread_cond_wait(&condDataSave,&data_save_mtx);
@@ -73,21 +73,15 @@ void * ThreadDataSave(void * arg){
 			p -> meterID,p -> instantFlow,p -> totalFlow,p -> T,p -> P,p -> DP,p -> timestamp);
 			if(mysql_real_query(sqlDataSave,querystrtmp,strlen(querystrtmp))){
 				printf("%s\n",mysql_error(sqlDataSave));
-				pthread_mutex_lock(&data_save_mtx);
-				SendBackMeterDataPrimaryNode(p);
-				pthread_mutex_unlock(&data_save_mtx);
-				p=NULL;
+//保存失败的不断尝试会带来保存低效；并且多次保存都不会成功
+//				pthread_mutex_lock(&data_save_mtx);
+//				SendBackMeterDataPrimaryNode(p);
+//				pthread_mutex_unlock(&data_save_mtx);
+
 			}else{
+#ifdef DEBUG
 				printf("meterDataPrimary has been saved\n");
-//1.4 free meterdataprimary node
-				free(p);
-				data_save_primary_count--;
-#ifdef DEBUG_outofmemory
-				--memory_node_counter_datasave;
-				if(memory_node_counter_datasave%0xff==0)
-				printf("--dataSave缓存个数：%d\n",memory_node_counter_datasave);
 #endif
-				p = NULL;
 			}
 		}
 //2.0 handle meterdatasecondary
@@ -106,27 +100,41 @@ void * ThreadDataSave(void * arg){
 				p1 -> order10,p1 -> order11,p1 -> order13,p1 -> order14,
 				p1 -> order15,p1 -> order16,p1 -> order17,p1 -> order18,
 				p1 -> order19,p1 -> order20,p1 -> timestamp);
-		    //printf("%s\n",querystrtmp);
+		    	//printf("%s\n",querystrtmp);
 			if(mysql_real_query(sqlDataSave,querystrtmp,strlen(querystrtmp))){
 				printf("%s\n",mysql_error(sqlDataSave));
-				pthread_mutex_lock(&data_save_mtx);
+//				pthread_mutex_lock(&data_save_mtx);
 					//无法存入时超过8次会被丢弃
-				SendBackMeterDataSecondaryNode(p1);
-				pthread_mutex_unlock(&data_save_mtx);
-				p1=NULL;
+//				SendBackMeterDataSecondaryNode(p1);
+//				pthread_mutex_unlock(&data_save_mtx);
 			}else{
+#ifdef DEBUG
 				printf("meterDataSecondary has been saved\n");
-				free(p1);
-				data_save_secondary_count--;
-
-#ifdef DEBUG_outofmemory
-				memory_node_counter_datasave--;
-				if(memory_node_counter_datasave%0xff==0)
-				printf("--dataSave缓存个数：%d\n",memory_node_counter_datasave);
 #endif
-				p1= NULL;
 			}
 		}
+data_save_continue:
+		if(p){
+#ifdef DEBUG_outofmemory
+			memory_node_counter_datasave--;
+#endif
+			data_save_primary_count--;
+			free(p);
+			p=NULL;
+
+		}
+		if(p1){
+#ifdef DEBUG_outofmemory
+			memory_node_counter_datasave--;
+#endif
+			data_save_secondary_count--;
+			free(p1);
+			p1=NULL;
+		}
+#ifdef DEBUG_outofmemory
+		if(memory_node_counter_datasave%0xfff==0)
+			printf("--dataSave缓存个数：%d\n",memory_node_counter_datasave);
+#endif
 	}
 }
 
@@ -143,7 +151,7 @@ char SendBackMeterDataPrimaryNode(meterDataPrimary * p){
 		data_save_primary_count--;
 #ifdef DEBUG_outofmemory
 		memory_node_counter_datasave--;
-		if(memory_node_counter_datasave%0xff==0)
+		if(memory_node_counter_datasave%0xfff==0)
 		printf("--dataSave缓存个数：%d\n",memory_node_counter_datasave);
 #endif
     }
