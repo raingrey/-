@@ -265,6 +265,7 @@ int main(int argc,char *argv[])
 #endif
 		//应对数据量过大,休息6s
 		if(dynamic_buffer_size > dynamic_buffer_limit_size){
+			printf("不稳定缓存大小超出限制=%dbytes",dynamic_buffer_size);
 			sleep(6);
 			continue;
 		}

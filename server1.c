@@ -18,6 +18,8 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
+#include <time.h>
+#include <sys/time.h>
 
 #define BUFF_SIZE 40
 void error_handling(char *message);
@@ -28,6 +30,15 @@ typedef struct{
 
 char generate_modbus_data(int dtu_tmp,int fmaddr_tmp);
 uint32_t  ModBusCRC16(unsigned char *updata,unsigned int len);
+
+char * get_str_time_now()
+{
+	time_t now;
+	struct tm * timenow;
+	time(&now);
+	timenow=localtime(&now);
+	return asctime(timenow);
+}
 int main (int argc,char* argv[]){
 //local socket descripter
 	int sock;
@@ -91,6 +102,7 @@ int main (int argc,char* argv[]){
 //还要把CRC校验的代码弄过来，在仪表伪装的部分有实现
 	int counter=0;
 	while(1){
+		printf("开始一轮模拟当前时间%s",get_str_time_now());
 		for(dtu_tmp=0;dtu_tmp<setdata.DTU_number;dtu_tmp++){
 			for(fmaddr_tmp=0;fmaddr_tmp<setdata.FM_number;fmaddr_tmp++){
 				memset(message,0x30,BUFF_SIZE);
@@ -110,14 +122,16 @@ int main (int argc,char* argv[]){
 				i=ModBusCRC16(message+15,23);
 				message[38] = i % 0x100;
 				message[39] = i % 0x10000 / 0x100;
-				for(i=0;i<BUFF_SIZE;i++)
-					printf("0x%x-",message[i]);
+//				for(i=0;i<BUFF_SIZE;i++)
+//					printf("0x%x-",message[i]);
 				sendto(sock,message,BUFF_SIZE,0,(struct sockaddr *)&server_addr,sizeof(server_addr));
 				counter++;
-				printf("\nMessage counte %d\n",counter);
+				if(counter%0xffff==0)
+					printf("\nMessage counte %d\n",counter);
 				usleep(sleep_time);
 			}
 		}
+		printf("完成一轮模拟当前时间%s",get_str_time_now());
 	}
 /*
 //	char * IPaddress=NULL;

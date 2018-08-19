@@ -131,7 +131,7 @@ int  CreateDeviceNodeCircleFromMysql(struct listeningNode *p);
 //为了创建MBRI快，不会查链重复
 int CreateModBusRegisterInfoCircleFromMysql(deviceNode *p);
 //创建MBRI需要快，但是更新MBRI需要防重复(未调-未用过)
-int UpdateModBusRegisterInfoCircleFromMysql(deviceNode * p){
+//int UpdateModBusRegisterInfoCircleFromMysql(deviceNode * p){
 //从mysql读东西
 
 
@@ -337,6 +337,8 @@ void * ThreadDataProcess(void * arg){
 		if(dnp = GetDeviceNodeComfortDeviceNumber(p1,mbds.addr)){
 			meterid = dnp -> meterID;
 		}else{
+			if(stable_buffer_size > stable_buffer_limit_size)
+				goto data_process_reset_connect;
 			if(CreateDeviceNodeCircleFromMysql(p1)){
 				printf("\nAlarm:mysql have no device node info about DTUID %ld",p1 -> DTUID);
 				goto data_process_reset_connect;
@@ -1104,7 +1106,7 @@ printf("函数结束时间数：%d\n\n\n",(int)time(NULL));
 	return 0;
     /// send circle back or alarm
 }
-
+/*
 int UpdateModBusRegisterInfoCircleFromMysql(deviceNode * p){
 
     uint8_t querystrtmp[MYSQLQUERYSTRSIZE] = {0};
@@ -1198,7 +1200,7 @@ CreateModBusRegisterInfoCircleFromMysqlcontinue:
         mysqlres = NULL;
 	return 0;
 }
-
+*/
 char HostNodeUdpSend(listeningNode * tree){
 
 	uint32_t j = 0;
@@ -1325,6 +1327,7 @@ char RBTListeningNodeCheck(){
 	//1.1 handle dumpTime out
 	i=(int)(time(NULL)-(p -> dumpTime));
 	if(stable_buffer_size > stable_buffer_limit_size)
+		printf("进入积极切断连接状态，稳定缓存共计%dbytes",stable_buffer_size);
 		if(i > MIDDUMPTIME){
 			struct listeningNode *data = RBTSearch(&listeningNodeRoot,p -> DTUID);
 			if (data) {

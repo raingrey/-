@@ -41,7 +41,7 @@ extern int memory_node_counter_DN;
 //宕机20小时删除链接
 #define MAXDUMPTIME 72000//seconds
 //稳定缓存超限后积极删除连接时间
-#define MIDDUMPTIME 3600//seconds
+#define MIDDUMPTIME 36000//seconds
 //超出此次数再次处理包
 #define MMAXHEARTBEATNUMBER 2000//
 //超出此次数忽略包
