@@ -22,6 +22,9 @@
 char SendBackMeterDataPrimaryNode(meterDataPrimary * p);
 char SendBackMeterDataSecondaryNode(meterDataSecondary* p);
 
+uint64_t primary_data_saved_counter=0;
+uint64_t secondary_data_saved_counter=0;
+
 void * ThreadDataSave(void * arg){
 
 	meterDataPrimary * p=NULL;
@@ -41,6 +44,10 @@ void * ThreadDataSave(void * arg){
 		while((meterDataPrimaryHead == NULL)&&(meterDataSecondaryHead == NULL)){
 #ifdef DEBUG_threadsleep
 			printf("数据保存线程第————%d————次睡眠,时间-%s",++sleep_counter,get_str_time_now());
+#endif
+#ifdef DEBUG_datasavecount
+			printf("常规仪表数据已经存储了%ld个\n",primary_data_saved_counter);
+			printf("用户自定义仪表数据已经存储了%ld个\n",primary_data_saved_counter);
 #endif
 			pthread_cond_wait(&condDataSave,&data_save_mtx);
 #ifdef DEBUG
@@ -79,6 +86,7 @@ void * ThreadDataSave(void * arg){
 //				pthread_mutex_unlock(&data_save_mtx);
 
 			}else{
+				primary_data_saved_counter++;
 #ifdef DEBUG
 				printf("meterDataPrimary has been saved\n");
 #endif
@@ -108,6 +116,7 @@ void * ThreadDataSave(void * arg){
 //				SendBackMeterDataSecondaryNode(p1);
 //				pthread_mutex_unlock(&data_save_mtx);
 			}else{
+				secondary_data_saved_counter++;
 #ifdef DEBUG
 				printf("meterDataSecondary has been saved\n");
 #endif
