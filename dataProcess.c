@@ -347,7 +347,7 @@ void * ThreadDataProcess(void * arg){
 			if(dnp = GetDeviceNodeComfortDeviceNumber(p1,mbds.addr)){
 				meterid = dnp -> meterID;
 			}else{
-				printf("\nAlarm:mysql have no  info about meterID %d\n",meterid);
+				printf("\nAlarm:mysql have no  info about DTUID %ld,modbusaddr=%d\n",p1 -> DTUID,mbds.addr);
 				goto data_process_reset_connect;
 			}
 		}

@@ -104,7 +104,7 @@ int main (int argc,char* argv[]){
 	while(1){
 		printf("开始一轮模拟当前时间%s",get_str_time_now());
 		printf("\nMessage counte %d\n",counter);
-		for(dtu_tmp=0;dtu_tmp<setdata.DTU_number;dtu_tmp++){
+		for(dtu_tmp=1;dtu_tmp<=setdata.DTU_number;dtu_tmp++){
 			for(fmaddr_tmp=0;fmaddr_tmp<setdata.FM_number;fmaddr_tmp++){
 				memset(message,0x30,BUFF_SIZE);
 				sprintf(message,"%015d",dtu_tmp);
