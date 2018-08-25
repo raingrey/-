@@ -101,9 +101,9 @@ int main (int argc,char* argv[]){
 //明天继续写根据用户输入来调整DTUID，和仪表地址
 //还要把CRC校验的代码弄过来，在仪表伪装的部分有实现
 	int counter=0;
+	int round_counter=0;
 	while(1){
 		printf("开始一轮模拟当前时间%s",get_str_time_now());
-		printf("\nMessage counte %d\n",counter);
 		for(dtu_tmp=1;dtu_tmp<=setdata.DTU_number;dtu_tmp++){
 			for(fmaddr_tmp=0;fmaddr_tmp<setdata.FM_number;fmaddr_tmp++){
 				memset(message,0x30,BUFF_SIZE);
@@ -132,6 +132,9 @@ int main (int argc,char* argv[]){
 				usleep(sleep_time);
 			}
 		}
+		printf("\nMessage counte %d\n",counter);
+		round_counter++;
+		printf("\nround counte %d\n",round_counter);
 		printf("休息3秒,完成一轮模拟当前时间%s",get_str_time_now());
 		sleep(3);
 	}
