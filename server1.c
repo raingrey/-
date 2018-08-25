@@ -145,8 +145,8 @@ int main (int argc,char* argv[]){
 		if(round_counter+1>round_set)
 			exit(0);
 		printf("\nround counte %d\n",round_counter);
-		printf("休息3秒,完成一轮模拟当前时间%s",get_str_time_now());
-		sleep(3);
+		printf("完成一轮模拟当前时间%s",get_str_time_now());
+		//sleep(3);
 	}
 /*
 //	char * IPaddress=NULL;
