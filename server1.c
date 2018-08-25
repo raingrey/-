@@ -60,6 +60,7 @@ int main (int argc,char* argv[]){
 	uint8_t message[BUFF_SIZE]={'3','5','6','5','6','6','0','7','0','9','0','3','4','4','0',0x08,0x03,0x14,0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x08,0x09,0x10,0x11,0x12,0x13,0x14,0x15,0x16,0x17,0x18,0x19,0x20,0xbe,0xa6};
 	uint64_t dtu_tmp;
 	uint8_t fmaddr_tmp;
+	uint32_t round_set;
 //check argc if the parameter is legal
 //create client socket, set protocol and connect type
 	sock=socket(PF_INET,SOCK_DGRAM,0);
@@ -90,6 +91,13 @@ int main (int argc,char* argv[]){
 //		sleep_time*=1000;
 	}else
 		sleep_time=1000000;
+	if(argc > 6){
+		round_set=atoi(argv[6]);
+		printf("数据包发送%d\n",sleep_time);
+//		sleep_time*=1000;
+	}else
+		round_set=0xffffffff;
+
 
 	printf("DTU数量%ld\n",setdata.DTU_number);
 	printf("ModBus总线中仪表数量%d\n",setdata.FM_number);
@@ -134,6 +142,8 @@ int main (int argc,char* argv[]){
 		}
 		printf("\nMessage counte %d\n",counter);
 		round_counter++;
+		if(round_counter+1>round_set)
+			exit(0);
 		printf("\nround counte %d\n",round_counter);
 		printf("休息3秒,完成一轮模拟当前时间%s",get_str_time_now());
 		sleep(3);
