@@ -155,6 +155,8 @@ int main(int argc,char *argv[])
 	char user[20]={"root"};
 	char passwd[30]={"ytfy1032744819"};
 	char database_name[30]={"tcp"};
+	my_bool data_process_reconnect=1;
+	my_bool data_save_reconnect=1;
 
 //argc-------count the unit of argv[]
 	if((argc==2)||(argc==5)){
@@ -184,6 +186,7 @@ int main(int argc,char *argv[])
 	}
 //initlize mysql
 	sql=mysql_init(sql);
+	mysql_options(sql, MYSQL_OPT_RECONNECT, &data_process_reconnect);
 //connect to mysqlSendBackUdpMsgNode
 	while(!mysql_real_connect(sql,"localhost",user,passwd,database_name,0,NULL,0)){
 		puts("Error connecting");
@@ -202,6 +205,7 @@ int main(int argc,char *argv[])
 
 //initlize mysqlDataSave
 	sqlDataSave=mysql_init(sqlDataSave);
+	mysql_options(sqlDataSave, MYSQL_OPT_RECONNECT, &data_save_reconnect);
 //connect to mysqlDataSave
 	if(!mysql_real_connect(sqlDataSave,"localhost",user,passwd,database_name,0,NULL,0)){
 		puts("Error connecting");
